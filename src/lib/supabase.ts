@@ -8,6 +8,7 @@ import { CharacterAsset, PropAsset, LocationAsset, ReferenceFrameAsset } from '.
 
 let supabaseClient: SupabaseClient | null = null;
 let currentUserId: string | null = null;
+let initPromise: Promise<{ supabase: SupabaseClient; userId: string }> | null = null;
 
 export enum OperationType {
   CREATE = 'create',
@@ -25,51 +26,62 @@ export interface SupabaseErrorInfo {
 }
 
 /**
- * Initialize Supabase client
+ * Initialize Supabase client (singleton pattern with Promise to prevent multiple instances)
  */
 export async function initSupabase() {
+  // Return existing instance if already initialized
   if (supabaseClient && currentUserId) {
     return { supabase: supabaseClient, userId: currentUserId };
   }
 
-  // Get Supabase config from server endpoint
-  const res = await fetch('/api/supabase-config');
-  if (!res.ok) {
-    throw new Error('Failed to load Supabase configuration from server.');
-  }
-  const { url, anonKey } = await res.json();
-
-  if (!url || !anonKey) {
-    throw new Error('Supabase URL and ANON_KEY are required in .env');
+  // If initialization is in progress, wait for it
+  if (initPromise) {
+    return initPromise;
   }
 
-  // Create Supabase client with options for self-hosted instances
-  supabaseClient = createClient(url, anonKey, {
-    auth: {
-      persistSession: false, // No need for auth sessions
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    db: {
-      schema: 'public',
-    },
-    global: {
-      headers: {
-        'Content-Type': 'application/json',
+  // Start new initialization
+  initPromise = (async () => {
+    // Get Supabase config from server endpoint
+    const res = await fetch('/api/supabase-config');
+    if (!res.ok) {
+      throw new Error('Failed to load Supabase configuration from server.');
+    }
+    const { url, anonKey } = await res.json();
+
+    if (!url || !anonKey) {
+      throw new Error('Supabase URL and ANON_KEY are required in .env');
+    }
+
+    // Create Supabase client with options for self-hosted instances
+    supabaseClient = createClient(url, anonKey, {
+      auth: {
+        persistSession: false, // No need for auth sessions
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
       },
-    },
-  });
+      db: {
+        schema: 'public',
+      },
+      global: {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+    });
 
-  // Generate or retrieve local user ID
-  let localUid = localStorage.getItem('seedance_user_id');
-  if (!localUid) {
-    localUid = `user-${Math.random().toString(36).substring(2, 15)}`;
-    localStorage.setItem('seedance_user_id', localUid);
-  }
+    // Generate or retrieve local user ID
+    let localUid = localStorage.getItem('seedance_user_id');
+    if (!localUid) {
+      localUid = `user-${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem('seedance_user_id', localUid);
+    }
 
-  currentUserId = localUid;
+    currentUserId = localUid;
 
-  return { supabase: supabaseClient, userId: currentUserId };
+    return { supabase: supabaseClient, userId: currentUserId };
+  })();
+
+  return initPromise;
 }
 
 /**

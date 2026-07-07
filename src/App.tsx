@@ -206,22 +206,18 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
       (typeof detailsObj?.model === "string" && detailsObj.model.trim()) ||
       (plainModelMatch?.[1]?.trim()) ||
       null;
-    const windowLabel =
-      (typeof detailsObj?.window === "string" && detailsObj.window.trim()) ||
-      (plainWindowMatch?.[1]?.trim()) ||
-      null;
 
     const lines = [
-      "Demasiadas solicitudes en poco tiempo (rate limit).",
-      modelLabel !== null ? `Modelo afectado: ${modelLabel}.` : "",
-      windowLabel !== null ? `Ventana de limite: ${windowLabel}.` : "",
+      "⏳ Límite de generaciones alcanzado (rate limit).",
+      modelLabel !== null ? `Modelo: ${modelLabel}` : "",
       waitMinutes !== null
-        ? `Intenta de nuevo en aproximadamente ${waitMinutes} min.`
+        ? `⏱️ Tiempo restante: ${waitMinutes} minutos`
         : "Intenta de nuevo en unos minutos.",
       resetTimeBogota !== null
-        ? `Reinicio estimado en horario de Colombia (UTC-5): ${resetTimeBogota}.`
+        ? `🕒 Reinicio a las ${resetTimeBogota} (hora Colombia UTC-5)`
         : "",
-      "Tip: evita lanzar muchos renders seguidos y usa cola para espaciar envios."
+      "💡 El sistema tiene 2 API keys que se alternan automáticamente.",
+      "Si ambas están agotadas, espera el tiempo indicado arriba."
     ].filter(Boolean);
     return lines.join("\n");
   }
@@ -416,7 +412,7 @@ export default function App() {
         const normalizedStatus = statusMap[originalStatus] || originalStatus || "queued";
         const videoUrl = item.video_url || item.url || (item.data?.results?.[0]) || null;
         
-        return {
+        const parsed = {
           id,
           status: normalizedStatus as any,
           created_at: parseTimestampToSeconds(item.created_at || item.created_at_time),
@@ -445,6 +441,16 @@ export default function App() {
             ...item
           }
         };
+        
+        console.log("[Frontend] Parsed video task:", {
+          id: parsed.id,
+          status: parsed.status,
+          model: parsed.model,
+          resolution: parsed.input.resolution,
+          hasVideoUrl: !!videoUrl
+        });
+        
+        return parsed;
       });
     } catch (err) {
       console.warn("Could not fetch history from API, falling back:", err);
@@ -464,10 +470,13 @@ export default function App() {
       // Fetch from proxy API
       const apiTasks = await fetchApiTasks();
       
+      console.log(`[Frontend] 📊 Fetched ${apiTasks.length} tasks from API`);
+      
       // Sort by created_at descending
       apiTasks.sort((a, b) => b.created_at - a.created_at);
       
       setTasks(apiTasks);
+      console.log(`[Frontend] ✅ Updated tasks state with ${apiTasks.length} videos`);
 
       // Start polling for any unfinished tasks
       apiTasks.forEach((task) => {
@@ -618,6 +627,24 @@ export default function App() {
       Object.values(activeIntervals.current).forEach((interval) => clearInterval(interval as any));
     };
   }, []);
+
+  // Auto-Setup: Persistencia Family Characters (if no characters exist)
+  useEffect(() => {
+    if (characters.length === 0 && !isFirebaseLoading) {
+      const DEFAULT_IMAGE_URL = "https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png";
+      
+      console.log("[Auto-Setup] No characters found, initializing Persistencia Family...");
+      setupPersistenciaFamily(DEFAULT_IMAGE_URL);
+    }
+  }, [characters.length, isFirebaseLoading]);
+
+  // Auto-Setup: Isla Location (if characters exist but no locations)
+  useEffect(() => {
+    if (characters.length >= 4 && locations.length === 0 && !isFirebaseLoading) {
+      console.log("[Auto-Setup] Characters configured, adding Isla location...");
+      setupIslaLocation();
+    }
+  }, [characters.length, locations.length, isFirebaseLoading]);
 
   // 7. Polling logic for a specific task
   const checkTaskStatus = async (taskId: string, currentUserId: string | null = null) => {
@@ -796,6 +823,63 @@ export default function App() {
     }
   };
 
+  // Quick Setup: Persistencia Studio Family Characters with Shared Reference Image
+  const setupPersistenciaFamily = async (sharedImageUrl: string) => {
+    if (!sharedImageUrl) {
+      alert("Por favor proporciona una URL de imagen válida.");
+      return;
+    }
+
+    // Clear existing characters (optional - comment out if you want to keep existing ones)
+    // setCharacters([]);
+
+    const familyCharacters = [
+      {
+        name: "Tomas",
+        description: "Adult male in blue overalls, orange glasses, black afro, tool belt, father figure",
+        avatarUrl: sharedImageUrl
+      },
+      {
+        name: "Lia",
+        description: "Young girl with long black hair, flower accessory, turquoise dress",
+        avatarUrl: sharedImageUrl
+      },
+      {
+        name: "Noah",
+        description: "Young boy with short brown hair, gray t-shirt, cargo shorts",
+        avatarUrl: sharedImageUrl
+      },
+      {
+        name: "Coco",
+        description: "Bright green bipedal iguana, walks on two legs, orange backpack",
+        avatarUrl: sharedImageUrl
+      }
+    ];
+
+    // Add all characters sequentially
+    for (const char of familyCharacters) {
+      await handleAddCharacter(char);
+      // Small delay to ensure sequential IDs
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    alert(`✅ ¡Listo! Se han agregado los 4 personajes de Persistencia usando 1 sola imagen de referencia.\n\nAhora puedes usar @Tomas, @Lia, @Noah, @Coco en tus prompts.`);
+  };
+
+  // Auto-setup Isla location with multi-angle reference image
+  const setupIslaLocation = async () => {
+    const islaImageUrl = "https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/isla.png";
+    
+    const islaLocation = {
+      name: "Isla",
+      description: "Small tropical island with white sand beach, turquoise crystal water, tall palm trees, wooden dock, rustic cabin, volcanic rocks. Multi-angle reference showing aerial view, front beach view, cabin detail, and coastline. Perfect for adventure stories and beach scenes.",
+      imageUrl: islaImageUrl
+    };
+
+    await handleAddLocation(islaLocation);
+    console.log("✅ Isla location auto-configured with multi-angle reference image");
+  };
+
   // 10. Handler to insert asset handle at cursor in composer
   const handleInsertAssetHandle = (handle: string) => {
     const textarea = document.getElementById("prompt-textarea") as HTMLTextAreaElement;
@@ -835,6 +919,14 @@ export default function App() {
     const fetchTimeout = 30000; // 30 seconds timeout
     
     console.log(`[Generation] Attempt ${retryCount + 1}/${maxRetries + 1}: Sending request to /api/seedance/generations`);
+    
+    // DEBUG: Log the exact image_urls being sent
+    if (input.image_urls && input.image_urls.length > 0) {
+      console.log('[API REQUEST - Image URLs Order]');
+      input.image_urls.forEach((url, idx) => {
+        console.log(`  [Image${idx + 1}] ${url}`);
+      });
+    }
     
     try {
       // Create abort controller for timeout
@@ -1257,7 +1349,7 @@ export default function App() {
       generation_type: finalGenType,
       duration: clip.duration,
       aspect_ratio: "16:9",
-      resolution: customResolution || "720p",
+      resolution: customResolution || "1080p",
       generate_audio: clip.generate_audio,
       watermark: false,
       web_search: false,
@@ -1303,7 +1395,7 @@ export default function App() {
         generation_type: finalGenType,
         duration: clip.duration,
         aspect_ratio: "16:9",
-        resolution: customResolution || "720p",
+        resolution: customResolution || "1080p",
         generate_audio: clip.generate_audio,
         watermark: false,
         web_search: false,
@@ -1368,7 +1460,7 @@ export default function App() {
           generation_type: finalGenType,
           duration: clip.duration,
           aspect_ratio: "16:9",
-          resolution: customResolution || "720p",
+          resolution: customResolution || "1080p",
           generate_audio: clip.generate_audio,
           watermark: false,
           web_search: false,
@@ -1623,6 +1715,7 @@ export default function App() {
                     onDeleteLocation={handleDeleteLocation}
                     onDeleteReferenceFrame={handleDeleteReferenceFrame}
                     onInsertAssetHandle={handleInsertAssetHandle}
+                    onQuickSetupPersistencia={setupPersistenciaFamily}
                   />
                 </div>
               </aside>
@@ -2109,6 +2202,7 @@ export default function App() {
                   props={props}
                   locations={locations}
                   cameraSettings={cameraSettings}
+                  onCameraSettingsChange={setCameraSettings}
                   promptText={promptText}
                   setPromptText={setPromptText}
                   apiKey={apiKey}
@@ -2378,6 +2472,7 @@ export default function App() {
                   onDeleteLocation={handleDeleteLocation}
                   onDeleteReferenceFrame={handleDeleteReferenceFrame}
                   onInsertAssetHandle={handleInsertAssetHandle}
+                  onQuickSetupPersistencia={setupPersistenciaFamily}
                 />
               </div>
             </div>

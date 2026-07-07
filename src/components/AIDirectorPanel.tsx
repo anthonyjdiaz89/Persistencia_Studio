@@ -643,54 +643,6 @@ export default function AIDirectorPanel({
                                 />
                               </div>
 
-                              {/* Simple inline replace helper if there are handles in the clip's prompt */}
-                              {(() => {
-                                const clipHandles: string[] = Array.from(new Set(clip.prompt.match(/@\w+/g) || [])) as string[];
-                                if (clipHandles.length === 0) return null;
-                                return (
-                                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] mt-1 bg-black/35 p-1.5 rounded-lg border border-dark-border/30">
-                                    <span className="text-[#71717A] text-[8px] font-mono uppercase">Reemplazar en este clip:</span>
-                                    {clipHandles.map(handle => (
-                                      <div key={handle} className="flex items-center space-x-1 bg-[#1a1b1f] px-1.5 py-0.5 rounded border border-dark-border/50">
-                                        <span className="text-orange-400 font-mono text-[9px] font-semibold">{handle}</span>
-                                        <span className="text-[#71717A] text-[8px]">→</span>
-                                        <select
-                                          onChange={(e) => {
-                                            const replacement = e.target.value;
-                                            if (replacement) {
-                                              const escaped = handle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                                              const regex = new RegExp(escaped, "g");
-                                              clip.prompt = clip.prompt.replace(regex, replacement);
-                                              setMessages([...messages]);
-                                              e.target.value = "";
-                                            }
-                                          }}
-                                          className="bg-transparent border-none text-[9px] text-slate-300 font-medium focus:ring-0 focus:outline-none p-0 cursor-pointer"
-                                          defaultValue=""
-                                        >
-                                          <option value="" disabled className="bg-[#18181b] text-gray-500">Cambiar por...</option>
-                                          {characters.map(c => {
-                                            const charHandle = `@${c.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                                            if (charHandle === handle) return null;
-                                            return <option key={c.id} value={charHandle} className="bg-[#18181b] text-slate-200">{c.name}</option>;
-                                          })}
-                                          {props.map(p => {
-                                            const propHandle = `@${p.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                                            if (propHandle === handle) return null;
-                                            return <option key={p.id} value={propHandle} className="bg-[#18181b] text-slate-200">{p.name}</option>;
-                                          })}
-                                          {locations.map(l => {
-                                            const locHandle = `@${l.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                                            if (locHandle === handle) return null;
-                                            return <option key={l.id} value={locHandle} className="bg-[#18181b] text-slate-200">{l.name}</option>;
-                                          })}
-                                        </select>
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-
                               {/* Camera Movement Badge Summary */}
                               <div className="flex flex-wrap gap-1">
                                 <span className="text-[8px] font-mono bg-[#1F1F23] border border-[#3F3F46] px-1 rounded text-[#71717A]">

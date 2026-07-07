@@ -18,7 +18,8 @@ import {
   HelpCircle,
   Info,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Wand2
 } from "lucide-react";
 import { getAssetHandle } from "../utils";
 import { uploadImageToSupabase } from "../lib/firebase";
@@ -37,6 +38,7 @@ interface AssetLibraryPanelProps {
   onDeleteLocation: (id: string) => void;
   onDeleteReferenceFrame?: (id: string) => void;
   onInsertAssetHandle: (handle: string) => void;
+  onQuickSetupPersistencia?: (imageUrl: string) => void;
 }
 
 export default function AssetLibraryPanel({
@@ -53,6 +55,7 @@ export default function AssetLibraryPanel({
   onDeleteLocation,
   onDeleteReferenceFrame,
   onInsertAssetHandle,
+  onQuickSetupPersistencia,
 }: AssetLibraryPanelProps) {
   const [activeTab, setActiveTab] = useState<AssetType>("character");
   const [searchQuery, setSearchQuery] = useState("");
@@ -209,6 +212,49 @@ export default function AssetLibraryPanel({
           <span>{showAddForm ? "Cancelar" : "+ Crear Material / Subir Imagen"}</span>
         </button>
       </div>
+
+      {/* Quick Setup Persistencia Button */}
+      {onQuickSetupPersistencia && characters.length === 0 && (
+        <div className="mb-4 p-3 bg-gradient-to-r from-[#d1f025]/10 to-[#d1f025]/5 border border-[#d1f025]/30 rounded-xl">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Wand2 className="w-5 h-5 text-[#d1f025]" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xs font-black text-white mb-1 uppercase tracking-wider">Setup Rápido: Familia Persistencia</h3>
+              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
+                Configura automáticamente los 4 personajes (@Tomas, @Lia, @Noah, @Coco) usando <span className="text-[#d1f025] font-bold">1 sola imagen de referencia compartida</span>. Libera 4 de 5 slots de imágenes para props/escenarios.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const defaultUrl = "https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png";
+                    onQuickSetupPersistencia(defaultUrl);
+                  }}
+                  className="px-3 py-1.5 bg-[#d1f025] text-black hover:brightness-110 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1.5 shadow-lg cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Auto-Setup (Usar Imagen Por Defecto)</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const url = prompt(
+                      "Pega la URL de tu imagen con los 4 personajes juntos:\n\n(Debe ser una URL pública, ej: https://...imagen.jpg)",
+                      "https://your-image-url.jpg"
+                    );
+                    if (url && url !== "https://your-image-url.jpg") {
+                      onQuickSetupPersistencia(url);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-[#18191e] text-[#d1f025] border border-[#d1f025]/30 hover:bg-[#d1f025]/10 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                >
+                  Otra URL
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex bg-[#050506] p-1 rounded border border-dark-border mb-4">

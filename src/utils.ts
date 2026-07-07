@@ -34,18 +34,19 @@ function normalizeForMatching(text: string): string {
  * Compiles Higgsfield-style camera settings into a descriptive prompt fragment
  */
 // Character height proportions for the animated series (in meters)
+// CRITICAL: These proportions MUST be maintained for visual consistency
 const CHARACTER_HEIGHTS: Record<string, string> = {
-  "lia": "1 meter tall",
-  "noah": "1 meter tall", 
-  "tomas": "1.7 meters tall",
-  "tomás": "1.7 meters tall",
-  "coco": "0.6 meters tall"
+  "lia": "small child 1 meter tall, half the height of adult Tomas",
+  "noah": "small child 1 meter tall, half the height of adult Tomas", 
+  "tomas": "TALL ADULT MALE 1.7 meters, significantly taller and larger than the small children Lia and Noah",
+  "tomás": "TALL ADULT MALE 1.7 meters, significantly taller and larger than the small children Lia and Noah",
+  "coco": "bipedal iguana 0.65 meters tall, WALKS ON TWO LEGS like cartoon character, reaches to children's elbows"
 };
 
 // Location and prop scale proportions for the animated series
 const LOCATION_PROPORTIONS: Record<string, string> = {
-  "isla": "tropical beach setting with wooden dock, house door is 2 meters tall (taller than Tomás)",
-  "island": "tropical beach setting with wooden dock, house door is 2 meters tall (taller than Tomás)",
+  "isla": "small tropical island approx 50m diameter, white sand beach surrounds turquoise water, tall palm trees 8-10m height, wooden dock 15m long extends into water, rustic wooden cabin with 2m tall door (taller than Tomás), dark volcanic rocks scattered on beach, crystal clear shallow water fades to deep blue",
+  "island": "small tropical island approx 50m diameter, white sand beach surrounds turquoise water, tall palm trees 8-10m height, wooden dock 15m long extends into water, rustic wooden cabin with 2m tall door (taller than Tomás), dark volcanic rocks scattered on beach, crystal clear shallow water fades to deep blue",
   "casa": "wooden cabin, main door is 2 meters tall (taller than Tomás)",
   "house": "wooden cabin, main door is 2 meters tall (taller than Tomás)"
 };
@@ -240,13 +241,18 @@ export function harvestAndSortRefImages(
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   
   // Log the consistent ordering
-  console.log('[Consistent Image Order]');
+  console.log('[Consistent Image Order - harvestAndSortRefImages]');
   sortedAssets.forEach((asset, idx) => {
     console.log(`  [Image${idx + 1}] ${asset.name} (UUID: ${asset.uuid})`);
   });
   
   // Return image URLs in alphabetical order
   const imageUrls = sortedAssets.map(a => a.imageUrl);
+  
+  console.log('[Image URLs being sent to API]');
+  imageUrls.slice(0, 9).forEach((url, idx) => {
+    console.log(`  [Image${idx + 1}] ${url}`);
+  });
   
   // Limit to 9 images (VideoGenAPI constraint)
   return imageUrls.slice(0, 9);
@@ -275,24 +281,31 @@ export function compileFinalPrompt(
   // Create UUID-based lookup maps for all assets
   // Uses normalized names for fuzzy matching (handles accents, case, etc.)
   const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; uuid: string; name: string; asset: any }>();
+  const assetByUuid = new Map<string, { type: 'character' | 'prop' | 'location'; uuid: string; name: string; asset: any }>();
   
   characters.forEach(c => {
     const normalized = normalizeForMatching(c.name);
-    assetLookup.set(normalized, { type: 'character', uuid: c.id, name: c.name, asset: c });
+    const assetInfo = { type: 'character' as const, uuid: c.id, name: c.name, asset: c };
+    assetLookup.set(normalized, assetInfo);
+    assetByUuid.set(c.id, assetInfo);
   });
   
   props.forEach(p => {
     const normalized = normalizeForMatching(p.name);
-    assetLookup.set(normalized, { type: 'prop', uuid: p.id, name: p.name, asset: p });
+    const assetInfo = { type: 'prop' as const, uuid: p.id, name: p.name, asset: p };
+    assetLookup.set(normalized, assetInfo);
+    assetByUuid.set(p.id, assetInfo);
   });
   
   locations.forEach(l => {
     const normalized = normalizeForMatching(l.name);
-    assetLookup.set(normalized, { type: 'location', uuid: l.id, name: l.name, asset: l });
+    const assetInfo = { type: 'location' as const, uuid: l.id, name: l.name, asset: l };
+    assetLookup.set(normalized, assetInfo);
+    assetByUuid.set(l.id, assetInfo);
   });
   
-  // Build consistent image index mapping (alphabetical order)
-  // This ensures @lia ALWAYS gets the same [ImageX] number
+  // Build consistent image index mapping
+  // GROUP BY IMAGE URL - assets sharing the same image URL get the same [ImageX] index
   const mentionedAssets = new Set<string>(); // Set of UUIDs
   const tempPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
   for (const match of rawPrompt.matchAll(tempPattern)) {
@@ -303,22 +316,54 @@ export function compileFinalPrompt(
     }
   }
   
-  // Sort by name (alphabetical) to create consistent index mapping
-  const sortedMentionedAssets = Array.from(mentionedAssets)
-    .map(uuid => {
-      // Find asset by UUID
-      for (const [_, assetInfo] of assetLookup) {
-        if (assetInfo.uuid === uuid) return assetInfo;
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a!.name.toLowerCase().localeCompare(b!.name.toLowerCase()));
+  // Get all mentioned assets with their image URLs
+  const mentionedAssetsWithImages = Array.from(mentionedAssets)
+    .map(uuid => assetByUuid.get(uuid))
+    .filter(Boolean);
   
-  // Create UUID → Image Index mapping
+  // Group assets by their image URL - assets with same URL share same [ImageX] index
+  const imageUrlToIndex = new Map<string, number>();
+  const uniqueImageUrls: string[] = [];
+  
+  mentionedAssetsWithImages.forEach(assetInfo => {
+    let imageUrl = '';
+    if (assetInfo!.type === 'character') {
+      imageUrl = (assetInfo!.asset as CharacterAsset).avatarUrl || '';
+    } else if (assetInfo!.type === 'prop') {
+      imageUrl = (assetInfo!.asset as PropAsset).imageUrl || '';
+    } else if (assetInfo!.type === 'location') {
+      imageUrl = (assetInfo!.asset as LocationAsset).imageUrl || '';
+    }
+    
+    if (imageUrl && !imageUrlToIndex.has(imageUrl)) {
+      uniqueImageUrls.push(imageUrl);
+      imageUrlToIndex.set(imageUrl, uniqueImageUrls.length); // 1-indexed
+    }
+  });
+  
+  // Create UUID → Image Index mapping (via image URL)
   const uuidToImageIndex = new Map<string, number>();
-  sortedMentionedAssets.forEach((assetInfo, idx) => {
-    uuidToImageIndex.set(assetInfo!.uuid, idx + 1); // 1-indexed for [Image1], [Image2], etc.
+  mentionedAssetsWithImages.forEach(assetInfo => {
+    let imageUrl = '';
+    if (assetInfo!.type === 'character') {
+      imageUrl = (assetInfo!.asset as CharacterAsset).avatarUrl || '';
+    } else if (assetInfo!.type === 'prop') {
+      imageUrl = (assetInfo!.asset as PropAsset).imageUrl || '';
+    } else if (assetInfo!.type === 'location') {
+      imageUrl = (assetInfo!.asset as LocationAsset).imageUrl || '';
+    }
+    
+    if (imageUrl) {
+      const index = imageUrlToIndex.get(imageUrl) || 0;
+      uuidToImageIndex.set(assetInfo!.uuid, index);
+    }
+  });
+  
+  // Log the mapping for debugging
+  console.log('[UUID → Image Index Mapping (Grouped by Image URL)]');
+  mentionedAssetsWithImages.forEach(assetInfo => {
+    const index = uuidToImageIndex.get(assetInfo!.uuid) || 0;
+    console.log(`  ${assetInfo!.name} (${assetInfo!.uuid}) → [Image${index}]`);
   });
 
   // Process all @mentions sequentially, replacing them with enriched descriptions + [ImageX]
@@ -351,9 +396,11 @@ export function compileFinalPrompt(
     // This ensures @lia ALWAYS gets the same number (e.g., [Image1])
     const imageIndexForThisMention = uuidToImageIndex.get(uuid) || 0;
     
-    // Debug logging
+    // Debug logging - log EVERY mention replacement
     if (imageIndexForThisMention > 0) {
-      console.log(`[Consistent Index] @${mentionText} → [Image${imageIndexForThisMention}] (UUID: ${uuid})`);
+      console.log(`[Mention Replacement] @${mentionText} (${assetInfo.name}) → [Image${imageIndexForThisMention}] (UUID: ${uuid})`);
+    } else {
+      console.log(`[Mention Replacement] @${mentionText} (${assetInfo.name}) → NO IMAGE (UUID: ${uuid})`);
     }
     
     // Build replacement text based on asset type
@@ -361,24 +408,38 @@ export function compileFinalPrompt(
       const char = asset as CharacterAsset;
       hasImage = !!char.avatarUrl;
       
-      const details: string[] = [];
-      if (char.description) details.push(char.description.trim());
-      if (char.appearance) details.push(char.appearance.trim());
-      if (char.clothing) details.push(char.clothing.trim());
-      if (char.gender) details.push(char.gender.trim());
-      
-      // Add character height proportion from the series bible
+      // Get character height proportion from the series bible
       const heightInfo = CHARACTER_HEIGHTS[normalized];
-      if (heightInfo) {
-        details.push(heightInfo);
-      }
-      
-      const detailsStr = details.filter(Boolean).join(", ");
-      const detailsSuffix = detailsStr ? ` (${detailsStr})` : "";
       
       let refToken = "";
+      let detailsSuffix = "";
+      
       if (hasImage && imageIndexForThisMention > 0) {
+        // HAS IMAGE: Use minimal prompt - trust the reference image
         refToken = ` [Image${imageIndexForThisMention}]`;
+        
+        // CRITICAL: Force Tomás to use reference image with emphatic instruction
+        if (normalized === 'tomas' || normalized === 'tomás') {
+          const forceRefInstruction = isSpanish
+            ? " ⚠️ USAR IMAGEN DE REFERENCIA"
+            : " ⚠️ USE REFERENCE IMAGE";
+          refToken += forceRefInstruction;
+        }
+        
+        // Only add height info, NOT full description (image shows the rest)
+        detailsSuffix = heightInfo ? ` (${heightInfo})` : "";
+        
+      } else {
+        // NO IMAGE: Use full description as fallback
+        const details: string[] = [];
+        if (char.description) details.push(char.description.trim());
+        if (char.appearance) details.push(char.appearance.trim());
+        if (char.clothing) details.push(char.clothing.trim());
+        if (char.gender) details.push(char.gender.trim());
+        if (heightInfo) details.push(heightInfo);
+        
+        const detailsStr = details.filter(Boolean).join(", ");
+        detailsSuffix = detailsStr ? ` (${detailsStr})` : "";
       }
 
       replacement = isSpanish 
@@ -389,12 +450,18 @@ export function compileFinalPrompt(
       const prop = asset as PropAsset;
       hasImage = !!prop.imageUrl;
       
-      const desc = prop.description ? prop.description.trim() : "";
-      const descSuffix = desc ? ` (${desc})` : "";
-      
       let refToken = "";
+      let descSuffix = "";
+      
       if (hasImage && imageIndexForThisMention > 0) {
-        refToken = ` [Image${imageIndexForThisMention}]`;
+        // HAS IMAGE: Minimal prompt
+        refToken = ` [Image${imageIndexForThisMention}] ⚠️ USAR IMAGEN`;
+        // Don't add full description, image shows it
+        descSuffix = "";
+      } else {
+        // NO IMAGE: Use full description
+        const desc = prop.description ? prop.description.trim() : "";
+        descSuffix = desc ? ` (${desc})` : "";
       }
 
       replacement = isSpanish 
@@ -405,19 +472,23 @@ export function compileFinalPrompt(
       const loc = asset as LocationAsset;
       hasImage = !!loc.imageUrl;
       
-      const desc = loc.description ? loc.description.trim() : "";
-      
       // Add location proportions from the series bible
       const proportionInfo = LOCATION_PROPORTIONS[normalized];
-      const descWithProportions = proportionInfo 
-        ? (desc ? `${desc}, ${proportionInfo}` : proportionInfo)
-        : desc;
-      
-      const descSuffix = descWithProportions ? ` (${descWithProportions})` : "";
       
       let refToken = "";
+      let descSuffix = "";
+      
       if (hasImage && imageIndexForThisMention > 0) {
-        refToken = ` [Image${imageIndexForThisMention}]`;
+        // HAS IMAGE: Minimal prompt + proportions only
+        refToken = ` [Image${imageIndexForThisMention}] ⚠️ USAR ELEMENTOS DE LA IMAGEN`;
+        descSuffix = proportionInfo ? ` (${proportionInfo})` : "";
+      } else {
+        // NO IMAGE: Use full description
+        const desc = loc.description ? loc.description.trim() : "";
+        const descWithProportions = proportionInfo 
+          ? (desc ? `${desc}, ${proportionInfo}` : proportionInfo)
+          : desc;
+        descSuffix = descWithProportions ? ` (${descWithProportions})` : "";
       }
 
       replacement = isSpanish 
@@ -432,6 +503,57 @@ export function compileFinalPrompt(
   // 4. Compile camera motion prompt
   const cameraPrompt = compileCameraPrompt(cameraSettings);
 
+  // 4.5. Build SCALE REFERENCE prefix if multiple characters are mentioned
+  // IMPORTANT: Sort by height (tallest first) to emphasize the contrast
+  let scaleReference = "";
+  const mentionedCharacters = mentionedAssetsWithImages
+    .filter(a => a?.type === 'character')
+    .map(a => a!.asset as CharacterAsset);
+  
+  if (mentionedCharacters.length >= 2) {
+    // Sort characters by height priority: adults first, then children, then animals
+    const heightPriority: Record<string, number> = {
+      'tomas': 1, 'tomás': 1,  // Adults first
+      'lia': 2, 'noah': 2,      // Children second
+      'coco': 3                 // Animals last
+    };
+    
+    const sortedByHeight = [...mentionedCharacters].sort((a, b) => {
+      const aPrio = heightPriority[normalizeForMatching(a.name)] || 999;
+      const bPrio = heightPriority[normalizeForMatching(b.name)] || 999;
+      return aPrio - bPrio;
+    });
+    
+    const scaleDescriptions: string[] = [];
+    
+    sortedByHeight.forEach(char => {
+      const normalized = normalizeForMatching(char.name);
+      const heightDesc = CHARACTER_HEIGHTS[normalized];
+      if (heightDesc) {
+        scaleDescriptions.push(`${char.name} is ${heightDesc}`);
+      }
+    });
+    
+    if (scaleDescriptions.length >= 2) {
+      // Check if Tomás is mentioned to add reference image enforcement
+      const tomasMentioned = mentionedCharacters.find(c => {
+        const norm = normalizeForMatching(c.name);
+        return norm === 'tomas' || norm === 'tomás';
+      });
+      
+      // Get Tomas's actual image index if he's mentioned
+      const tomasImageIndex = tomasMentioned ? (uuidToImageIndex.get(tomasMentioned.id) || 1) : 1;
+      
+      const maintainInstruction = isSpanish
+        ? `CRITICAL: Mantener estas proporciones exactas. Tomas DEBE verse mucho más alto y grande que los niños.${tomasMentioned ? ` ⚠️ TOMAS: USAR IMAGEN DE REFERENCIA [Image${tomasImageIndex}] OBLIGATORIAMENTE (overol azul, gafas naranjas, pelo afro, cinturón herramientas).` : ''}`
+        : `CRITICAL: Maintain exact proportions. Tomas MUST appear much taller and larger than the children.${tomasMentioned ? ` ⚠️ TOMAS: USE REFERENCE IMAGE [Image${tomasImageIndex}] MANDATORY (blue overalls, orange glasses, afro hair, tool belt).` : ''}`;
+      
+      scaleReference = isSpanish
+        ? `[ESCALA OBLIGATORIA: ${scaleDescriptions.join('; ')}. ${maintainInstruction}] `
+        : `[MANDATORY SCALE: ${scaleDescriptions.join('; ')}. ${maintainInstruction}] `;
+    }
+  }
+
   // 5. Append camera prompt to final prompt
   let finalPrompt = compiled.trim();
   if (cameraPrompt) {
@@ -442,6 +564,53 @@ export function compileFinalPrompt(
       finalPrompt += " " + cameraPrompt;
     }
   }
+  
+  // Prepend scale reference at the very beginning
+  if (scaleReference) {
+    finalPrompt = scaleReference + finalPrompt;
+  }
+  
+  // GLOBAL RULE: Do not add elements not explicitly mentioned
+  // Build character count instruction
+  let characterCountInstruction = "";
+  if (mentionedCharacters.length > 0) {
+    const charNames = mentionedCharacters.map(c => c.name).join(', ');
+    characterCountInstruction = isSpanish
+      ? `[⚠️ CONTEO EXACTO: SOLO ${mentionedCharacters.length} personaje(s) en escena: ${charNames}. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE ${mentionedCharacters.length} personaje(s), ni más ni menos.] `
+      : `[⚠️ EXACT COUNT: ONLY ${mentionedCharacters.length} character(s) in scene: ${charNames}. DO NOT duplicate any character. DO NOT add extra people. EXACTLY ${mentionedCharacters.length} character(s), no more no less.] `;
+  }
+  
+  const noExtraElementsInstruction = isSpanish
+    ? "[🚫 REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] "
+    : "[🚫 STRICT GLOBAL RULE: DO NOT add characters, objects, animals or additional elements that are not EXPLICITLY mentioned in the prompt. ONLY render exactly what is requested. DO NOT invent extras, background people, additional props, tools, utensils, or decorative elements. If it's not textually mentioned in the prompt or as [ImageX], it should NOT appear in the scene. FORBIDDEN to add context or environment elements not requested.] ";
+  
+  finalPrompt = characterCountInstruction + noExtraElementsInstruction + finalPrompt;
+  
+  // Add emphatic reference image instruction at the very start if there are character images
+  if (mentionedCharacters.length > 0 && refImages.length > 0) {
+    const tomasMentioned = mentionedCharacters.find(c => {
+      const norm = normalizeForMatching(c.name);
+      return norm === 'tomas' || norm === 'tomás';
+    });
+    
+    if (tomasMentioned) {
+      // Build dynamic image list based on actual unique images
+      const imageListParts: string[] = [];
+      for (let i = 1; i <= uniqueImageUrls.length; i++) {
+        imageListParts.push(`[Image${i}]`);
+      }
+      const imageListStr = imageListParts.join(', ');
+      
+      // Find Tomas's actual image index
+      const tomasImageIndex = uuidToImageIndex.get(tomasMentioned.id) || 1;
+      
+      const refImageInstruction = isSpanish
+        ? `[⚠️ INSTRUCCIÓN CRÍTICA: Usar EXACTAMENTE las imágenes de referencia ${imageListStr} para cada personaje mencionado. ESPECIALMENTE Tomas [Image${tomasImageIndex}] DEBE verse IDÉNTICO a la imagen de referencia con overol azul, gafas naranjas, pelo afro y cinturón de herramientas. NO inventar apariencias alternativas.] `
+        : `[⚠️ CRITICAL INSTRUCTION: Use EXACTLY the reference images ${imageListStr} for each character mentioned. ESPECIALLY Tomas [Image${tomasImageIndex}] MUST look IDENTICAL to reference image with blue overalls, orange glasses, afro hair and tool belt. DO NOT invent alternative appearances.] `;
+      
+      finalPrompt = refImageInstruction + finalPrompt;
+    }
+  }
 
   if (hasReferenceVideo) {
     const continuityInstruction = isSpanish
@@ -449,6 +618,10 @@ export function compileFinalPrompt(
       : "[CONTINUITY: Generate this video as the direct temporal and logical sequence of the previous scene, maintaining identical characters, clothing, lighting, environment background, and visual rhythm]";
     finalPrompt = `${continuityInstruction} ${finalPrompt}`;
   }
+
+  console.log('[FINAL COMPILED PROMPT]');
+  console.log(finalPrompt);
+  console.log('---');
 
   return {
     compiled: finalPrompt,

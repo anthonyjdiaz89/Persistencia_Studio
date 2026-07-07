@@ -843,14 +843,32 @@ JSON Schema:
 
   // Initialize API keys on server start
   apiKeys.push(...loadApiKeys());
-  console.log(`[Multi-Key System] Loaded ${apiKeys.length} API key(s) for load balancing`);
+  console.log(`[Multi-Key System] ✅ Loaded ${apiKeys.length} API key(s) for load balancing`);
   apiKeys.forEach((keyInfo, idx) => {
-    console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}...`);
+    console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}... (available: ${keyInfo.isAvailable})`);
   });
+
+  // Log key status every 5 minutes to track distribution and resets
+  setInterval(() => {
+    console.log(`\n[Multi-Key System] 📊 Status Report (${new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })} COT):`);
+    apiKeys.forEach((keyInfo, idx) => {
+      const status = keyInfo.isAvailable ? '🟢 AVAILABLE' : '🔴 RATE-LIMITED';
+      const usage = `${keyInfo.currentUsage}/${keyInfo.limit}`;
+      let resetInfo = '';
+      if (!keyInfo.isAvailable) {
+        const now = Date.now();
+        const waitSeconds = Math.max(0, Math.ceil((keyInfo.rateLimitResetTime - now) / 1000));
+        const waitMinutes = Math.ceil(waitSeconds / 60);
+        resetInfo = ` (resets in ${waitMinutes} min)`;
+      }
+      console.log(`  [${idx + 1}] ${keyInfo.alias}: ${status} | Usage: ${usage}${resetInfo}`);
+    });
+    console.log('');
+  }, 5 * 60 * 1000); // Every 5 minutes
 
   // Select best available API key (round-robin with availability check)
   let lastUsedKeyIndex = -1;
-  const selectBestAvailableApiKey = (): ApiKeyInfo | null => {
+  const selectBestAvailableApiKey = (ignoreRateLimit = false): ApiKeyInfo | null => {
     if (apiKeys.length === 0) return null;
     
     const now = Date.now();
@@ -860,9 +878,18 @@ JSON Schema:
       if (!keyInfo.isAvailable && now >= keyInfo.rateLimitResetTime) {
         keyInfo.isAvailable = true;
         keyInfo.currentUsage = 0;
-        console.log(`[Multi-Key System] ${keyInfo.alias} rate limit reset - now available`);
+        const currentTimeCOT = new Date(now).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
+        console.log(`[Multi-Key System] 🟢 ${keyInfo.alias} rate limit RESET - now available (${currentTimeCOT} COT)`);
       }
     });
+    
+    // For history/status endpoints that don't count against rate limits
+    // ALWAYS return first key, even if rate-limited
+    if (ignoreRateLimit && apiKeys.length > 0) {
+      const firstKey = apiKeys[0];
+      console.log(`[Multi-Key System] Selected ${firstKey.alias} for unlimited endpoint (ignoring rate limit, available: ${firstKey.isAvailable})`);
+      return firstKey;
+    }
     
     // Find next available key (round-robin)
     for (let i = 0; i < apiKeys.length; i++) {
@@ -891,7 +918,13 @@ JSON Schema:
       keyInfo.isAvailable = false;
       keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
       keyInfo.currentUsage = keyInfo.limit;
-      console.log(`[Multi-Key System] ${keyInfo.alias} marked as rate-limited for ${resetInSeconds}s`);
+      
+      const resetDate = new Date(keyInfo.rateLimitResetTime);
+      const resetTimeCOT = resetDate.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
+      const resetMinutes = Math.ceil(resetInSeconds / 60);
+      
+      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED for ${resetMinutes} min (${resetInSeconds}s)`);
+      console.log(`[Multi-Key System]    Reset time: ${resetTimeCOT} COT (${resetDate.toISOString()})`);
     }
   };
 
@@ -908,15 +941,31 @@ JSON Schema:
   };
 
   // Helper to resolve the Seedance/VideoGenAPI API Key (from request headers or load balancer)
-  const getApiKey = (req: express.Request): string | null => {
+  // Returns { key: string } or { allKeysExhausted: true, waitSeconds: number, resetTime: string }
+  const getApiKey = (req: express.Request, ignoreRateLimit = false): string | { allKeysExhausted: true; waitSeconds: number; resetTime: string } | null => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 7) {
       return authHeader.substring(7);
     }
     
     // Use load balancing system
-    const selectedKey = selectBestAvailableApiKey();
-    return selectedKey ? selectedKey.key : null;
+    const selectedKey = selectBestAvailableApiKey(ignoreRateLimit);
+    if (selectedKey) {
+      return selectedKey.key;
+    }
+    
+    // All keys exhausted - return wait info
+    if (apiKeys.length > 0 && !ignoreRateLimit) {
+      const now = Date.now();
+      const soonestReset = apiKeys.reduce((earliest, current) => 
+        current.rateLimitResetTime < earliest.rateLimitResetTime ? current : earliest
+      );
+      const waitSeconds = Math.max(1, Math.ceil((soonestReset.rateLimitResetTime - now) / 1000));
+      const resetTime = new Date(soonestReset.rateLimitResetTime).toISOString();
+      return { allKeysExhausted: true, waitSeconds, resetTime };
+    }
+    
+    return null;
   };
 
   // In-memory sliding-window rate limiter for /api/seedance/generations.
@@ -1109,8 +1158,32 @@ JSON Schema:
 
   // API Route: Proxy Video Generation Task Creation
   app.post("/api/seedance/generations", async (req, res) => {
-    const apiKey = getApiKey(req);
-    if (!apiKey) {
+    const apiKeyResult = getApiKey(req);
+    
+    // Check if all keys are exhausted
+    if (apiKeyResult && typeof apiKeyResult === 'object' && 'allKeysExhausted' in apiKeyResult) {
+      return res.status(429).json({
+        error: {
+          code: "all_keys_rate_limited",
+          message: "All API keys are temporarily rate-limited. Please wait before trying again.",
+          details: {
+            current_usage: apiKeys[0]?.limit || 5,
+            limit: apiKeys[0]?.limit || 5,
+            window: "varies per key",
+            seconds_until_reset: apiKeyResult.waitSeconds,
+            reset_time: apiKeyResult.resetTime,
+            rule: "All keys exhausted - waiting for earliest reset"
+          }
+        },
+        message: "All API keys rate-limited. Please wait.",
+        details: {
+          seconds_until_reset: apiKeyResult.waitSeconds,
+          reset_time: apiKeyResult.resetTime
+        }
+      });
+    }
+    
+    if (!apiKeyResult || typeof apiKeyResult !== 'string') {
       return res.status(401).json({
         error: {
           code: "missing_api_key",
@@ -1118,6 +1191,8 @@ JSON Schema:
         }
       });
     }
+    
+    const apiKey = apiKeyResult;
 
     const { model, input, callback_url } = req.body;
 
@@ -1227,6 +1302,9 @@ JSON Schema:
         requestedDuration > 10 &&
         requestedGenerationType === "text-to-video";
 
+      // DEBUG: Log received resolution
+      console.log(`[VideoGenAPI Proxy] Received resolution: "${sanitizedInput.resolution}" (type: ${typeof sanitizedInput.resolution})`);
+
       const effectiveImageUrls = enforceTextOnlyForSeedance25
         ? []
         : (Array.isArray(sanitizedInput.image_urls) ? sanitizedInput.image_urls : []);
@@ -1281,7 +1359,7 @@ JSON Schema:
         prompt: sanitizedInput.prompt,
         aspect_ratio: normalizedAspectRatio,
         duration: requestedDuration,
-        resolution: sanitizedInput.resolution === "4k" ? "4K" : (sanitizedInput.resolution || "720p"),
+        resolution: sanitizedInput.resolution === "4k" ? "4K" : (sanitizedInput.resolution || "1080p"),
         style: sanitizedInput.style || "realistic",
         add_audio: sanitizedInput.add_audio ?? sanitizedInput.generate_audio ?? false,
         audio_prompt: sanitizedInput.audio_prompt || undefined,
@@ -1310,6 +1388,7 @@ JSON Schema:
         payload.aspect_ratio = "16:9";
       }
 
+      console.log("[VideoGenAPI Proxy] 📹 RESOLUTION BEING SENT:", payload.resolution);
       console.log("[VideoGenAPI Proxy] Forwarding creation request to VideoGenAPI...", JSON.stringify(payload));
 
       const response = await fetch("https://videogenapi.com/api/v1/generate", {
@@ -1338,6 +1417,44 @@ JSON Schema:
 
       if (!response.ok) {
         console.warn("[VideoGenAPI Proxy] Generation request rejected:", JSON.stringify(responseData));
+        console.warn("[VideoGenAPI Proxy] 🔍 DEBUG - Error structure:", {
+          hasError: !!responseData.error,
+          errorType: typeof responseData.error,
+          hasDetails: !!responseData.details,
+          detailsType: typeof responseData.details,
+          fullErrorLower: JSON.stringify(responseData).toLowerCase()
+        });
+        
+        // Check for daily limit exceeded error - mark key as unavailable for 24 hours
+        const errorMessage = JSON.stringify(responseData).toLowerCase();
+        console.warn("[VideoGenAPI Proxy] 🔍 Checking for 'daily limit' in:", errorMessage.substring(0, 200));
+        
+        if (errorMessage.includes("daily limit") || errorMessage.includes("dailylimit")) {
+          console.warn(`[VideoGenAPI Proxy] 🚫 ${apiKeys.find(k => k.key === apiKey)?.alias || 'Current key'} has exceeded daily limit - marking unavailable for 24 hours`);
+          markKeyAsRateLimited(apiKey, 86400); // 24 hours = 86400 seconds
+          
+          // Try with next available key
+          const nextKey = selectBestAvailableApiKey();
+          if (nextKey) {
+            console.log(`[VideoGenAPI Proxy] 🔄 Switching to ${nextKey.alias} - please retry your request`);
+            return res.status(503).json({
+              error: {
+                code: "daily_limit_exceeded",
+                message: "Current API key has exceeded daily limit. The system has switched to backup key. Please retry your request.",
+                details: ["Switched to backup API key. Please retry your request."]
+              }
+            });
+          } else {
+            console.warn(`[VideoGenAPI Proxy] ⚠️ All API keys are exhausted!`);
+            return res.status(503).json({
+              error: {
+                code: "all_keys_exhausted",
+                message: "All API keys have exceeded their daily limits. Please try again tomorrow.",
+                details: ["All API keys exhausted. Service unavailable until limits reset."]
+              }
+            });
+          }
+        }
         
         // Handle 429 rate limit errors - mark key as unavailable
         if (response.status === 429 && responseData.details) {
@@ -1494,8 +1611,12 @@ JSON Schema:
 
   // API Route: Proxy Video Generation History
   app.get("/api/seedance/history", async (req, res) => {
-    const apiKey = getApiKey(req);
+    // History endpoint is unlimited, so ignore rate limits
+    const apiKey = getApiKey(req, true);
+    console.log("[VideoGenAPI Proxy] 🔍 History request received. Has API key:", !!apiKey);
+    
     if (!apiKey) {
+      console.warn("[VideoGenAPI Proxy] ❌ No API key found for history request");
       return res.status(401).json({
         error: {
           code: "missing_api_key",
@@ -1505,7 +1626,8 @@ JSON Schema:
     }
 
     try {
-      console.log("[VideoGenAPI Proxy] Fetching generations history from VideoGenAPI...");
+      console.log("[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...");
+      console.log("[VideoGenAPI Proxy] Using API key:", apiKey.substring(0, 20) + "...");
       
       // Try /api/v1/generations first as it is the most common history list endpoint
       const responseGen = await fetch("https://videogenapi.com/api/v1/generations", {
@@ -1515,13 +1637,24 @@ JSON Schema:
         }
       });
 
+      console.log(`[VideoGenAPI Proxy] /api/v1/generations response status: ${responseGen.status}`);
+
       if (responseGen.ok) {
         const responseData = await responseGen.json();
-        console.log("[VideoGenAPI Proxy] History fetch successful from /api/v1/generations.");
+        console.log("[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.");
+        console.log(`[VideoGenAPI Proxy] 📊 Found ${Array.isArray(responseData.data) ? responseData.data.length : 0} videos`);
+        
+        if (responseData.data?.[0]) {
+          console.log("[VideoGenAPI Proxy] 🔍 Full sample object:", responseData.data[0]);
+        }
+        
         return res.json(responseData);
       }
 
-      console.log(`[VideoGenAPI Proxy] /api/v1/generations returned status ${responseGen.status}. Trying fallback /api/v1/tasks...`);
+      // Log error response
+      const errorText = await responseGen.text();
+      console.warn(`[VideoGenAPI Proxy] ⚠️ /api/v1/generations returned ${responseGen.status}:`, errorText.substring(0, 200));
+      console.log(`[VideoGenAPI Proxy] Trying fallback /api/v1/tasks...`);
       
       // Fallback 1: Try /api/v1/tasks
       const responseTasks = await fetch("https://videogenapi.com/api/v1/tasks", {

@@ -205,6 +205,7 @@ interface PromptBuilderPanelProps {
   props: PropAsset[];
   locations: LocationAsset[];
   cameraSettings: CameraSettings;
+  onCameraSettingsChange: (settings: CameraSettings) => void;
   
   promptText: string;
   setPromptText: (text: string) => void;
@@ -237,6 +238,7 @@ export default function PromptBuilderPanel({
   props,
   locations,
   cameraSettings,
+  onCameraSettingsChange,
   promptText,
   setPromptText,
   apiKey,
@@ -272,12 +274,9 @@ export default function PromptBuilderPanel({
 
   // Advanced toggle
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [genre, setGenre] = useState("General");
-  const [stylePreset, setStylePreset] = useState("Cinema Auto");
 
   // Modals for visual selection in Spanish
-  const [showGenreModal, setShowGenreModal] = useState(false);
-  const [showStyleModal, setShowStyleModal] = useState(false);
+  const [showTimeOfDayModal, setShowTimeOfDayModal] = useState(false);
   const [showModelModal, setShowModelModal] = useState(false);
 
   // Auto-complete dropdown for @ characters and casting assets
@@ -648,22 +647,26 @@ export default function PromptBuilderPanel({
     <div className="w-full flex flex-col space-y-4" id="multimodal-editor">
       {/* Quick Settings Pills (Floating layout above editor) */}
       <div className="flex flex-wrap items-center justify-center gap-2 mb-[-12px] relative z-20">
-        <button 
-          type="button"
-          onClick={() => setShowGenreModal(true)}
-          className="glass-panel px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer shadow-lg border border-transparent hover:border-[#454933]"
+        <div 
+          className="glass-panel px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium text-slate-300 shadow-lg border border-transparent"
         >
-          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-red-500 to-orange-500"></span>
-          <span>Género: <span className="text-[#d1f025] font-bold">{genre}</span></span>
-        </button>
+          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500"></span>
+          <span>Serie: <span className="text-[#d1f025] font-bold">Isla Magica</span></span>
+        </div>
 
         <button 
           type="button"
-          onClick={() => setShowStyleModal(true)}
+          onClick={() => setShowTimeOfDayModal(true)}
           className="glass-panel px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer shadow-lg border border-transparent hover:border-[#454933]"
         >
           <Sparkles className="w-3.5 h-3.5 text-primary-container" />
-          <span>Estilo: <span className="text-[#d1f025] font-bold">{stylePreset}</span></span>
+          <span>Horario: <span className="text-[#d1f025] font-bold">{{
+            'dawn': 'Amanecer',
+            'day': 'Día',
+            'afternoon': 'Tarde',
+            'sunset': 'Atardecer',
+            'night': 'Noche'
+          }[cameraSettings.timeOfDay]}</span></span>
         </button>
 
         <button 
@@ -803,6 +806,23 @@ export default function PromptBuilderPanel({
             </div>
           )}
 
+          {/* Reference Images Counter */}
+          {combinedRefImages.length > 0 && (
+            <div className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 border ${
+              combinedRefImages.length > 5 
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' 
+                : 'bg-[#d1f025]/10 border-[#d1f025]/30 text-[#d1f025]'
+            }`}>
+              <ImageIcon className="w-3 h-3" />
+              <span>
+                {Math.min(combinedRefImages.length, 5)}/5 imágenes activas
+                {combinedRefImages.length > 5 && (
+                  <span className="text-amber-400 ml-1">({combinedRefImages.length - 5} ignoradas)</span>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Video Reference / Continuity Control */}
           <div className="flex items-center gap-2 bg-[#18191e] border border-[#d1f025]/25 rounded-lg p-1.5 shadow-sm">
             <Film className="w-3.5 h-3.5 text-[#d1f025]" />
@@ -867,40 +887,100 @@ export default function PromptBuilderPanel({
           )}
 
           {/* Render Automatically Detected Cast Assets */}
-          {detectedAssets.map((asset, idx) => (
-            <div 
-              key={`detected-${idx}`}
-              className="relative group flex items-center bg-[#18191e] border border-[#d1f025]/40 rounded-lg p-1 pr-2.5 space-x-1.5 shadow-sm"
-              title={`${asset.type}: ${asset.name} (Auto-vinculado)`}
-            >
-              <div className="w-7 h-7 rounded border border-[#d1f025]/30 overflow-hidden bg-black/40">
-                <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          {detectedAssets.map((asset, idx) => {
+            const indexInCombined = combinedRefImages.indexOf(asset.imageUrl);
+            const isInActiveRange = indexInCombined >= 0 && indexInCombined < 5;
+            const willBeIgnored = !isInActiveRange && combinedRefImages.length > 5;
+            
+            return (
+              <div 
+                key={`detected-${idx}`}
+                className={`relative group flex items-center rounded-lg p-1 pr-2.5 space-x-1.5 shadow-sm border ${
+                  isInActiveRange 
+                    ? 'bg-[#18191e] border-[#d1f025]/40' 
+                    : 'bg-[#18191e]/50 border-gray-600/40 opacity-50'
+                }`}
+                title={`${asset.type}: ${asset.name} (Auto-vinculado)${willBeIgnored ? ' - NO SE USARÁ (excede límite de 5)' : ''}`}
+              >
+                <div className={`w-7 h-7 rounded overflow-hidden ${
+                  isInActiveRange 
+                    ? 'border border-[#d1f025]/30 bg-black/40' 
+                    : 'border border-gray-600/30 bg-black/20'
+                }`}>
+                  <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  {isInActiveRange && (
+                    <div className="absolute top-0 left-0 bg-[#d1f025] text-black font-mono font-black text-[7px] px-1">
+                      {indexInCombined + 1}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col">
+                  <span className={`text-[8px] font-black uppercase tracking-wider leading-none ${
+                    isInActiveRange ? 'text-[#d1f025]' : 'text-gray-500'
+                  }`}>{asset.type}</span>
+                  <span className={`text-[10px] font-medium truncate max-w-[80px] ${
+                    isInActiveRange ? 'text-white' : 'text-gray-500'
+                  }`}>@{asset.name}</span>
+                </div>
+                <span className={`absolute -top-1.5 -right-1.5 font-mono font-black text-[7px] px-1 rounded-full border scale-90 ${
+                  isInActiveRange 
+                    ? 'bg-[#d1f025] text-black border-black' 
+                    : 'bg-gray-600 text-gray-300 border-gray-700'
+                }`}>
+                  {willBeIgnored ? '❌' : 'Auto'}
+                </span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase text-[#d1f025] tracking-wider leading-none">{asset.type}</span>
-                <span className="text-[10px] text-white font-medium truncate max-w-[80px]">@{asset.name}</span>
-              </div>
-              <span className="absolute -top-1.5 -right-1.5 bg-[#d1f025] text-black font-mono font-black text-[7px] px-1 rounded-full border border-black uppercase scale-90">
-                Auto
-              </span>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Render Active Character/Prop Avatars as visual inputs if they exist */}
-          {refImageUrls.map((imgUrl, idx) => (
-            <div 
-              key={idx} 
-              className="w-10 h-10 rounded border border-outline-variant overflow-hidden cursor-pointer hover:border-primary-container transition-colors relative group"
-            >
-              <img src={imgUrl} alt={`Ref ${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          {refImageUrls.map((imgUrl, idx) => {
+            const totalImages = combinedRefImages.length;
+            const isInActiveRange = idx < 5; // API only accepts first 5
+            const willBeIgnored = totalImages > 5 && !isInActiveRange;
+            
+            return (
               <div 
-                onClick={() => setRefImageUrls(refImageUrls.filter((_, i) => i !== idx))}
-                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[10px] text-rose-400 font-bold"
+                key={idx} 
+                className={`w-10 h-10 rounded border overflow-hidden cursor-pointer transition-all relative group ${
+                  isInActiveRange 
+                    ? 'border-[#d1f025] shadow-[0_0_8px_rgba(209,240,37,0.3)]' 
+                    : 'border-gray-600 opacity-50'
+                }`}
               >
-                Eliminar
+                <img src={imgUrl} alt={`Ref ${idx}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                {isInActiveRange && (
+                  <div className="absolute -top-1 -right-1 bg-[#d1f025] text-black font-mono font-black text-[8px] px-1 rounded-full border border-black z-10">
+                    {idx + 1}
+                  </div>
+                )}
+                {willBeIgnored && (
+                  <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+                    <span className="text-[8px] text-red-400 font-bold">❌</span>
+                  </div>
+                )}
+                <div 
+                  onClick={() => setRefImageUrls(refImageUrls.filter((_, i) => i !== idx))}
+                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[10px] text-rose-400 font-bold z-20"
+                >
+                  Eliminar
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Warning when exceeding 5 reference images limit */}
+          {combinedRefImages.length > 5 && (
+            <div className="col-span-full flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 text-[10px]">
+              <span className="text-amber-400 font-bold">⚠️</span>
+              <div className="flex-1 text-amber-200">
+                <span className="font-bold">Límite de API: </span>
+                Solo las primeras <span className="font-black text-[#d1f025]">5 imágenes</span> se enviarán a VideoGenAPI.
+                <br />
+                <span className="text-amber-300/70">Tienes {combinedRefImages.length} imágenes totales. Elimina o reordena para elegir cuáles usar.</span>
               </div>
             </div>
-          ))}
+          )}
 
           {/* Quick preset thumbnail loaders if empty list */}
           {refImageUrls.length === 0 && detectedAssets.length === 0 && (
@@ -997,69 +1077,6 @@ export default function PromptBuilderPanel({
             />
           </div>
         </div>
-
-        {/* Smart Handle Replace Tool */}
-        {(() => {
-          const detectedHandlesInPrompt = Array.from(new Set(promptText.match(/@\w+/g) || []));
-          if (detectedHandlesInPrompt.length === 0) return null;
-          return (
-            <div className="px-4 py-2 bg-[#d1f025]/5 border-t border-[#454933]/15 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[#d1f025] uppercase font-mono text-[9px] font-bold flex items-center gap-1.5">
-                <RefreshCw className="w-3 h-3 animate-spin-slow" /> Reemplazar personaje/elemento en el Prompt:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {detectedHandlesInPrompt.map(handle => (
-                  <div key={handle} className="flex items-center space-x-1.5 bg-[#18191e] px-2 py-1 rounded border border-[#d1f025]/20 shadow-sm">
-                    <span className="text-[#d1f025] font-mono font-semibold text-[10px]">{handle}</span>
-                    <span className="text-gray-500 text-[9px]">→</span>
-                    <select
-                      onChange={(e) => {
-                        const replacementHandle = e.target.value;
-                        if (replacementHandle) {
-                          const escapedHandle = handle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                          const regex = new RegExp(escapedHandle, "g");
-                          setPromptText(promptText.replace(regex, replacementHandle));
-                          e.target.value = "";
-                        }
-                      }}
-                      className="bg-transparent border-none text-[10px] text-slate-300 font-medium focus:ring-0 focus:outline-none p-0 cursor-pointer"
-                      defaultValue=""
-                    >
-                      <option value="" disabled className="bg-[#18191e] text-[#71717A]">Cambiar por...</option>
-                      {characters.map(c => {
-                        const charHandle = `@${c.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                        if (charHandle === handle) return null;
-                        return (
-                          <option key={c.id} value={charHandle} className="bg-[#18191e] text-slate-200">
-                            {c.name} ({charHandle})
-                          </option>
-                        );
-                      })}
-                      {props.map(p => {
-                        const propHandle = `@${p.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                        if (propHandle === handle) return null;
-                        return (
-                          <option key={p.id} value={propHandle} className="bg-[#18191e] text-slate-200">
-                            {p.name} ({propHandle})
-                          </option>
-                        );
-                      })}
-                      {locations.map(l => {
-                        const locHandle = `@${l.name.replace(/[^a-zA-Z0-9]/g, "")}`;
-                        if (locHandle === handle) return null;
-                        return (
-                          <option key={l.id} value={locHandle} className="bg-[#18191e] text-slate-200">
-                            {l.name} ({locHandle})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
 
         {/* Materials Dropdown / Injection Tags */}
         <div className="px-4 py-1.5 bg-black/10 border-t border-[#454933]/15 flex items-center justify-between flex-wrap gap-2 text-[10px]">
@@ -1328,99 +1345,45 @@ export default function PromptBuilderPanel({
         </div>
       </div>
 
-      {/* Modal Visual de Selección de Género */}
-      {showGenreModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#111216] border border-[#454933]/50 rounded-2xl p-6 max-w-2xl w-full shadow-2xl relative">
-            <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-orange-500"></span>
-              Seleccionar Género Cinematográfico
-            </h3>
-            <p className="text-xs text-gray-400 mb-5">Elige una dirección de estilo temático para los prompts con ejemplos visuales de referencia:</p>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
-              {[
-                { name: "General", desc: "Equilibrado, apto para cualquier tipo de plano", img: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&auto=format&fit=crop&q=60" },
-                { name: "Sci-Fi", desc: "Tecnología futurista, naves, planetas distantes", img: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&auto=format&fit=crop&q=60" },
-                { name: "Cyberpunk", desc: "Metrópolis lluviosas, luces de neón cian/rosa", img: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&auto=format&fit=crop&q=60" },
-                { name: "Anime", desc: "Estilo anime cell-shaded japonés, nubes hermosas", img: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=60" },
-                { name: "Fantasía", desc: "Castillos medievales, criaturas, magia ambiental", img: "https://images.unsplash.com/photo-1519074002996-a69e7ac46a42?w=400&auto=format&fit=crop&q=60" },
-                { name: "Realismo", desc: "Máxima fidelidad biológica, texturas naturales", img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=60" }
-              ].map(g => (
-                <button
-                  key={g.name}
-                  type="button"
-                  onClick={() => { setGenre(g.name); setShowGenreModal(false); }}
-                  className={`group relative rounded-xl overflow-hidden border text-left flex flex-col transition-all cursor-pointer h-[120px] ${
-                    genre === g.name ? "border-[#d1f025] bg-[#d1f025]/5" : "border-white/10 hover:border-white/30 bg-[#16181d]"
-                  }`}
-                >
-                  <div className="w-full h-16 relative overflow-hidden bg-black/40">
-                    <img src={g.img} alt={g.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" referrerPolicy="no-referrer" />
-                    {genre === g.name && (
-                      <div className="absolute top-1.5 right-1.5 bg-[#d1f025] text-black rounded-full p-0.5 shadow">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-2 flex-1 flex flex-col justify-between">
-                    <span className="text-xs font-black text-white leading-tight">{g.name}</span>
-                    <span className="text-[9px] text-gray-400 leading-tight truncate">{g.desc}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex justify-end mt-5">
-              <button
-                type="button"
-                onClick={() => setShowGenreModal(false)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Visual de Selección de Estilo */}
-      {showStyleModal && (
+      {/* Modal Visual de Selección de Horario del Día */}
+      {showTimeOfDayModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#111216] border border-[#454933]/50 rounded-2xl p-6 max-w-2xl w-full shadow-2xl relative">
             <h3 className="text-sm font-black text-white uppercase tracking-wider mb-1 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#d1f025]" />
-              Seleccionar Estilo Visual de Render
+              Seleccionar Horario del Día
             </h3>
-            <p className="text-xs text-gray-400 mb-5">Elige el acabado estético general y simulación de cámara física:</p>
+            <p className="text-xs text-gray-400 mb-5">Elige el horario y atmósfera de iluminación para tu escena en Isla Mágica:</p>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
               {[
-                { name: "Cinema Auto", desc: "Ajuste equilibrado por defecto de Seedance AI", img: "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&auto=format&fit=crop&q=60" },
-                { name: "3D Pixar", desc: "Animación estilizada 3D, colores cálidos saturados", img: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&auto=format&fit=crop&q=60" },
-                { name: "Vintage 35mm", desc: "Textura analógica vintage, grano sutil de película", img: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=400&auto=format&fit=crop&q=60" },
-                { name: "Moody Neon", desc: "Contraste extremo iluminado por luces de neón", img: "https://images.unsplash.com/photo-1543536448-d209d2d13a1c?w=400&auto=format&fit=crop&q=60" },
-                { name: "Hyper-Realistic", desc: "Detalles micro-poro, iluminación global fotográfica", img: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=60" }
-              ].map(s => (
+                { value: "dawn" as const, name: "Amanecer", desc: "Luz suave rosa y naranja, atmósfera mágica", gradient: "from-pink-400 via-orange-300 to-yellow-200" },
+                { value: "day" as const, name: "Día", desc: "Luz brillante natural, cielo azul vibrante", gradient: "from-sky-400 via-blue-300 to-cyan-200" },
+                { value: "afternoon" as const, name: "Tarde", desc: "Luz cálida dorada, golden hour", gradient: "from-amber-400 via-orange-300 to-yellow-300" },
+                { value: "sunset" as const, name: "Atardecer", desc: "Cielo naranja y púrpura, luz cinematográfica", gradient: "from-orange-500 via-pink-400 to-purple-400" },
+                { value: "night" as const, name: "Noche", desc: "Atmósfera nocturna, luz de luna suave", gradient: "from-blue-900 via-indigo-700 to-purple-800" }
+              ].map(tod => (
                 <button
-                  key={s.name}
+                  key={tod.value}
                   type="button"
-                  onClick={() => { setStylePreset(s.name); setShowStyleModal(false); }}
+                  onClick={() => { 
+                    onCameraSettingsChange({ ...cameraSettings, timeOfDay: tod.value }); 
+                    setShowTimeOfDayModal(false); 
+                  }}
                   className={`group relative rounded-xl overflow-hidden border text-left flex flex-col transition-all cursor-pointer h-[120px] ${
-                    stylePreset === s.name ? "border-[#d1f025] bg-[#d1f025]/5" : "border-white/10 hover:border-white/30 bg-[#16181d]"
+                    cameraSettings.timeOfDay === tod.value ? "border-[#d1f025] bg-[#d1f025]/5" : "border-white/10 hover:border-white/30 bg-[#16181d]"
                   }`}
                 >
-                  <div className="w-full h-16 relative overflow-hidden bg-black/40">
-                    <img src={s.img} alt={s.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" referrerPolicy="no-referrer" />
-                    {stylePreset === s.name && (
+                  <div className={`w-full h-16 relative overflow-hidden bg-gradient-to-br ${tod.gradient} opacity-80 group-hover:opacity-100 transition-opacity`}>
+                    {cameraSettings.timeOfDay === tod.value && (
                       <div className="absolute top-1.5 right-1.5 bg-[#d1f025] text-black rounded-full p-0.5 shadow">
                         <Check className="w-3 h-3 stroke-[3]" />
                       </div>
                     )}
                   </div>
                   <div className="p-2 flex-1 flex flex-col justify-between">
-                    <span className="text-xs font-black text-white leading-tight">{s.name}</span>
-                    <span className="text-[9px] text-gray-400 leading-tight truncate">{s.desc}</span>
+                    <span className="text-xs font-black text-white leading-tight">{tod.name}</span>
+                    <span className="text-[9px] text-gray-400 leading-tight truncate">{tod.desc}</span>
                   </div>
                 </button>
               ))}
@@ -1429,7 +1392,7 @@ export default function PromptBuilderPanel({
             <div className="flex justify-end mt-5">
               <button
                 type="button"
-                onClick={() => setShowStyleModal(false)}
+                onClick={() => setShowTimeOfDayModal(false)}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold"
               >
                 Cerrar
