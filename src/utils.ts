@@ -110,12 +110,15 @@ export function compileCameraPrompt(settings: CameraSettings): string {
 }
 
 /**
- * Harvests reference images from characters, props, and locations mentioned in the prompt,
- * and sorts them by the order they appear in the prompt text.
+ * Harvests reference images from characters, props, and locations mentioned in the prompt.
  * 
- * IMPORTANT: This function preserves the EXACT order of mentions in the prompt.
- * Each mention gets its own slot in the image array, even if it's the same asset.
- * This ensures [Image1], [Image2], etc. in the compiled prompt match image_urls[0], image_urls[1], etc.
+ * CRITICAL CHANGE: Returns images in ALPHABETICAL ORDER by asset name, not mention order.
+ * This ensures each asset ALWAYS gets the same [ImageX] number across different prompts.
+ * 
+ * Example:
+ * - Prompt 1: "@tomas @lia bailan" → [lia.jpg, tomas.jpg] (alphabetical)
+ * - Prompt 2: "@lia @tomas cantan" → [lia.jpg, tomas.jpg] (same order!)
+ * - Result: Lia is ALWAYS [Image1], Tomas is ALWAYS [Image2]
  */
 export function harvestAndSortRefImages(
   prompt: string,
@@ -123,45 +126,58 @@ export function harvestAndSortRefImages(
   props: PropAsset[],
   locations: LocationAsset[]
 ): string[] {
-  const imageUrls: string[] = [];
-  
   // Create a UUID-based map for precise asset lookup
-  // Maps normalized name → { uuid, imageUrl }
-  const assetMap = new Map<string, { uuid: string; imageUrl: string }>(); 
+  // Maps normalized name → { uuid, name, imageUrl }
+  const assetMap = new Map<string, { uuid: string; name: string; imageUrl: string }>(); 
   
   characters.forEach(c => {
     if (!c.avatarUrl) return;
     const normalized = normalizeForMatching(c.name);
-    assetMap.set(normalized, { uuid: c.id, imageUrl: c.avatarUrl });
+    assetMap.set(normalized, { uuid: c.id, name: c.name, imageUrl: c.avatarUrl });
   });
   
   props.forEach(p => {
     if (!p.imageUrl) return;
     const normalized = normalizeForMatching(p.name);
-    assetMap.set(normalized, { uuid: p.id, imageUrl: p.imageUrl });
+    assetMap.set(normalized, { uuid: p.id, name: p.name, imageUrl: p.imageUrl });
   });
   
   locations.forEach(l => {
     if (!l.imageUrl) return;
     const normalized = normalizeForMatching(l.name);
-    assetMap.set(normalized, { uuid: l.id, imageUrl: l.imageUrl });
+    assetMap.set(normalized, { uuid: l.id, name: l.name, imageUrl: l.imageUrl });
   });
   
-  // Find all @mentions in order (including duplicates)
-  // Match @word (letters, numbers, accents)
+  // Find all UNIQUE @mentions in the prompt
   const mentionPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
   const matches = prompt.matchAll(mentionPattern);
+  const uniqueAssets = new Set<string>(); // Set of UUIDs
+  const assetsByUuid = new Map<string, { name: string; imageUrl: string }>(); // UUID → asset data
   
   for (const match of matches) {
-    const mentionText = match[1]; // e.g., "lia" or "Lía" from "@lia" or "@Lía"
+    const mentionText = match[1];
     const normalized = normalizeForMatching(mentionText);
     const assetData = assetMap.get(normalized);
     
     if (assetData) {
-      console.log(`[UUID Match] @${mentionText} → UUID: ${assetData.uuid}`);
-      imageUrls.push(assetData.imageUrl);
+      uniqueAssets.add(assetData.uuid);
+      assetsByUuid.set(assetData.uuid, { name: assetData.name, imageUrl: assetData.imageUrl });
     }
   }
+  
+  // Sort assets ALPHABETICALLY by name (case-insensitive)
+  const sortedAssets = Array.from(uniqueAssets)
+    .map(uuid => ({ uuid, ...assetsByUuid.get(uuid)! }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  
+  // Log the consistent ordering
+  console.log('[Consistent Image Order]');
+  sortedAssets.forEach((asset, idx) => {
+    console.log(`  [Image${idx + 1}] ${asset.name} (UUID: ${asset.uuid})`);
+  });
+  
+  // Return image URLs in alphabetical order
+  const imageUrls = sortedAssets.map(a => a.imageUrl);
   
   // Limit to 9 images (VideoGenAPI constraint)
   return imageUrls.slice(0, 9);
@@ -189,26 +205,55 @@ export function compileFinalPrompt(
 
   // Create UUID-based lookup maps for all assets
   // Uses normalized names for fuzzy matching (handles accents, case, etc.)
-  const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; uuid: string; asset: any }>();
+  const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; uuid: string; name: string; asset: any }>();
   
   characters.forEach(c => {
     const normalized = normalizeForMatching(c.name);
-    assetLookup.set(normalized, { type: 'character', uuid: c.id, asset: c });
+    assetLookup.set(normalized, { type: 'character', uuid: c.id, name: c.name, asset: c });
   });
   
   props.forEach(p => {
     const normalized = normalizeForMatching(p.name);
-    assetLookup.set(normalized, { type: 'prop', uuid: p.id, asset: p });
+    assetLookup.set(normalized, { type: 'prop', uuid: p.id, name: p.name, asset: p });
   });
   
   locations.forEach(l => {
     const normalized = normalizeForMatching(l.name);
-    assetLookup.set(normalized, { type: 'location', uuid: l.id, asset: l });
+    assetLookup.set(normalized, { type: 'location', uuid: l.id, name: l.name, asset: l });
+  });
+  
+  // Build consistent image index mapping (alphabetical order)
+  // This ensures @lia ALWAYS gets the same [ImageX] number
+  const mentionedAssets = new Set<string>(); // Set of UUIDs
+  const tempPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
+  for (const match of compiled.matchAll(tempPattern)) {
+    const normalized = normalizeForMatching(match[1]);
+    const assetInfo = assetLookup.get(normalized);
+    if (assetInfo && refImages.length > 0) {
+      mentionedAssets.add(assetInfo.uuid);
+    }
+  }
+  
+  // Sort by name (alphabetical) to create consistent index mapping
+  const sortedMentionedAssets = Array.from(mentionedAssets)
+    .map(uuid => {
+      // Find asset by UUID
+      for (const [_, assetInfo] of assetLookup) {
+        if (assetInfo.uuid === uuid) return assetInfo;
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.name.toLowerCase().localeCompare(b!.name.toLowerCase()));
+  
+  // Create UUID → Image Index mapping
+  const uuidToImageIndex = new Map<string, number>();
+  sortedMentionedAssets.forEach((assetInfo, idx) => {
+    uuidToImageIndex.set(assetInfo!.uuid, idx + 1); // 1-indexed for [Image1], [Image2], etc.
   });
 
   // Process all @mentions sequentially, replacing them with enriched descriptions + [ImageX]
   let compiled = rawPrompt;
-  let imageIndex = 0; // Tracks current position in refImages array
   
   // Find all @mentions in order (supports accents: @lia, @Lía, etc.)
   const mentionPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
@@ -224,41 +269,22 @@ export function compileFinalPrompt(
     
     const assetInfo = assetLookup.get(normalized);
     
-    // Debug logging with UUID
-    if (assetInfo) {
-      console.log(`[UUID Compile] @${mentionText} → UUID: ${assetInfo.uuid} (${assetInfo.type})`);
-    }
-    
     if (!assetInfo) {
       // Not a recognized asset, leave as-is
       continue;
     }
     
-    const { type, asset } = assetInfo;
+    const { type, uuid, asset } = assetInfo;
     let replacement = "";
     let hasImage = false;
     
-    // Calculate the actual image index for THIS specific mention
-    // We need to count how many @mentions with images appear BEFORE this one
-    const mentionsBeforeThis = matches.slice(0, i);
-    let imageIndexForThisMention = 0;
+    // Get CONSISTENT image index from alphabetical ordering
+    // This ensures @lia ALWAYS gets the same number (e.g., [Image1])
+    const imageIndexForThisMention = uuidToImageIndex.get(uuid) || 0;
     
-    for (const prevMatch of mentionsBeforeThis) {
-      const prevMentionText = prevMatch[1];
-      const prevNormalized = normalizeForMatching(prevMentionText);
-      const prevAssetInfo = assetLookup.get(prevNormalized);
-      
-      if (prevAssetInfo) {
-        const prevAsset = prevAssetInfo.asset;
-        const prevHasImage = 
-          (prevAssetInfo.type === 'character' && prevAsset.avatarUrl) ||
-          (prevAssetInfo.type === 'prop' && prevAsset.imageUrl) ||
-          (prevAssetInfo.type === 'location' && prevAsset.imageUrl);
-        
-        if (prevHasImage) {
-          imageIndexForThisMention++;
-        }
-      }
+    // Debug logging
+    if (imageIndexForThisMention > 0) {
+      console.log(`[Consistent Index] @${mentionText} → [Image${imageIndexForThisMention}] (UUID: ${uuid})`);
     }
     
     // Build replacement text based on asset type
@@ -276,10 +302,8 @@ export function compileFinalPrompt(
       const detailsSuffix = detailsStr ? ` (${detailsStr})` : "";
       
       let refToken = "";
-      if (hasImage && imageIndexForThisMention < refImages.length) {
-        refToken = isSpanish 
-          ? ` [Image${imageIndexForThisMention + 1}]` 
-          : ` [Image${imageIndexForThisMention + 1}]`;
+      if (hasImage && imageIndexForThisMention > 0) {
+        refToken = ` [Image${imageIndexForThisMention}]`;
       }
 
       replacement = isSpanish 
@@ -294,10 +318,8 @@ export function compileFinalPrompt(
       const descSuffix = desc ? ` (${desc})` : "";
       
       let refToken = "";
-      if (hasImage && imageIndexForThisMention < refImages.length) {
-        refToken = isSpanish 
-          ? ` [Image${imageIndexForThisMention + 1}]` 
-          : ` [Image${imageIndexForThisMention + 1}]`;
+      if (hasImage && imageIndexForThisMention > 0) {
+        refToken = ` [Image${imageIndexForThisMention}]`;
       }
 
       replacement = isSpanish 
@@ -312,10 +334,8 @@ export function compileFinalPrompt(
       const descSuffix = desc ? ` (${desc})` : "";
       
       let refToken = "";
-      if (hasImage && imageIndexForThisMention < refImages.length) {
-        refToken = isSpanish 
-          ? ` [Image${imageIndexForThisMention + 1}]` 
-          : ` [Image${imageIndexForThisMention + 1}]`;
+      if (hasImage && imageIndexForThisMention > 0) {
+        refToken = ` [Image${imageIndexForThisMention}]`;
       }
 
       replacement = isSpanish 
