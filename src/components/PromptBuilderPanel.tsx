@@ -647,18 +647,6 @@ export default function PromptBuilderPanel({
     asset.name.toLowerCase().includes(atSearchQuery)
   );
 
-  const getCreditsCost = () => {
-    let rate = 4;
-    if (model === "sora-2" || model === "veo-31" || model === "veo3") rate = 10;
-    else if (model === "gemini-omni") rate = 8;
-    else if (model === "kling-3") rate = 7.5;
-    else if (model === "seedance-25" || model === "higgsfield_v1") rate = 6;
-    else if (model === "grok-imagine-1-5" || model === "seedance-2") rate = 4;
-    else if (model === "seedance-2-mini" || model === "wan-25" || model === "ltxv-2") rate = 2;
-    else rate = 1;
-    return Math.ceil(duration * rate);
-  };
-
   const handleGenerateClick = () => {
     let finalGenType = generationType;
     if (combinedRefImages.length > 0) {
@@ -734,39 +722,14 @@ export default function PromptBuilderPanel({
           <span>Cámara: <span className="text-white font-bold">{cameraSettings.style.toUpperCase()} track</span></span>
         </button>
 
-        {/* API Key status pill */}
-        {hasEnvApiKey || apiKey ? (
-          <button
-            type="button"
-            onClick={() => setShowApiKeyPanel(!showApiKeyPanel)}
-            className={`px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex items-center space-x-1 transition-all border cursor-pointer ${
-              validationStatus?.success
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                : "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse"
-            }`}
-            id="apiKeyStatusPill"
-          >
-            <Key className="w-3 h-3" />
-            <span>{validationStatus?.success ? "Key Connected" : "Verify Key"}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowApiKeyPanel(!showApiKeyPanel)}
-            className="px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold tracking-wider uppercase animate-pulse flex items-center space-x-1 cursor-pointer"
-            id="apiKeyNeededPill"
-          >
-            <Key className="w-3 h-3" />
-            <span>Key Needed</span>
-          </button>
-        )}
+        {/* API Key status pill - Hidden: Keys now managed via .env multi-key system */}
       </div>
 
       {/* Main Glass-Panel Editor Box */}
       <div className="glass-panel rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-[#454933]/30">
         
-        {/* API Key Box if visible */}
-        {showApiKeyPanel && (
+        {/* API Key Box - Hidden: Keys now managed via .env multi-key system */}
+        {false && (
           <div className="p-4 bg-[#0d0e12] border-b border-[#454933]/30 space-y-3 animate-fade-in" id="seedance-key-manager">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1.5">
@@ -1405,9 +1368,6 @@ export default function PromptBuilderPanel({
               <span className="flex items-center space-x-1 font-extrabold text-black">
                 {isGenerating ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" /> : <Play className="w-3.5 h-3.5 fill-current text-black" />}
                 <span>{isGenerating ? "Generando" : "Generar Shot"}</span>
-              </span>
-              <span className="text-[10px] font-bold text-[#5c6b00] flex items-center gap-1.5 mt-0.5">
-                ⚡ {getCreditsCost()} créditos
               </span>
             </button>
           </div>

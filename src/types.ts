@@ -85,7 +85,6 @@ export interface VideoTask {
   status: "queued" | "generating" | "completed" | "failed";
   created_at: number;
   model: string;
-  credits: number;
   failed_reason: string | null;
   input?: GenerationInput; // Stored locally for replay
   sceneTitle?: string;       // AI Director metadata for perfect temporal continuity

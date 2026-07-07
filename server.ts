@@ -428,6 +428,30 @@ async function startServer() {
     }
   });
 
+  // API Route: Supabase Config Delivery
+  app.get("/api/supabase-config", (req, res) => {
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+      console.log("[Supabase Config] URL:", supabaseUrl);
+      console.log("[Supabase Config] Key:", supabaseAnonKey ? `${supabaseAnonKey.substring(0, 30)}...` : 'undefined');
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        return res.status(500).json({ 
+          error: "Supabase configuration missing. Please set SUPABASE_URL and SUPABASE_ANON_KEY in .env" 
+        });
+      }
+
+      return res.json({
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // API Route: Proxy Video for HTML5 Canvas Frame Extraction with CORS headers
   app.get("/api/proxy-video", async (req, res) => {
     const videoUrl = req.query.url as string;
@@ -1330,7 +1354,6 @@ JSON Schema:
           status: "queued",
           created_at: Math.floor(Date.now() / 1000),
           model: model || "seedance-2-0",
-          credits: responseData.credits || 60,
           data: null
         });
       }
@@ -1338,7 +1361,6 @@ JSON Schema:
       return res.json({
         success: true,
         taskId: taskId,
-        credits: responseData.credits || 60,
         status: "queued"
       });
     } catch (error: any) {

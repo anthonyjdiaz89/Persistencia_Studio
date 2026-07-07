@@ -17,7 +17,6 @@ import {
   Zap,
   RotateCcw,
   BadgeAlert,
-  Coins,
   History
 } from "lucide-react";
 
@@ -121,12 +120,6 @@ export default function VideoHistoryPanel({
                   </div>
 
                   <div className="flex items-center space-x-1.5">
-                    {/* Cost Badge */}
-                    <span className="flex items-center text-[10px] font-medium text-[#71717A] bg-dark-input px-2 py-0.5 rounded border border-dark-border">
-                      <Coins className="w-3 h-3 text-orange-400 mr-1" />
-                      {task.credits} credits
-                    </span>
-
                     {/* Manual Refresh Button */}
                     {isPending && (
                       <button

@@ -63,21 +63,20 @@ import AIDirectorPanel, { ClipBlueprint, SceneBlueprint } from "./components/AID
 import CameraOverlay from "./components/CameraOverlay";
 import { compileFinalPrompt, getAssetHandle, harvestAndSortRefImages } from "./utils";
 import { 
-  initFirebase, 
-  fetchUserAssets, 
+  initSupabase, 
+  getCharacters,
   saveCharacter, 
-  deleteCharacterDoc, 
+  deleteCharacter, 
+  getProps,
   saveProp, 
-  deletePropDoc, 
+  deleteProp, 
+  getLocations,
   saveLocation, 
-  deleteLocationDoc, 
-  fetchUserTasks, 
-  saveTaskDoc,
-  deleteTaskDoc,
-  fetchUserReferenceFrames,
+  deleteLocation, 
+  getReferenceFrames,
   saveReferenceFrame,
-  deleteReferenceFrameDoc
-} from "./lib/firebase";
+  deleteReferenceFrame
+} from "./lib/supabase";
 
 const parseTimestampToSeconds = (val: any): number => {
   if (!val) return Math.floor(Date.now() / 1000);
@@ -239,8 +238,7 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
     fullTextForSafetyCheck.includes("points used") ||
     fullTextForSafetyCheck.includes("quota") ||
     fullTextForSafetyCheck.includes("monthly usage limit") ||
-    fullTextForSafetyCheck.includes("insufficient credits") ||
-    fullTextForSafetyCheck.includes("not enough credits");
+    fullTextForSafetyCheck.includes("insufficient balance");
 
   const genericSubmitFailure =
     fullTextForSafetyCheck.includes("failed to submit request to video generation service") ||
@@ -262,8 +260,8 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
 
   if (quotaExceeded) {
     return [
-      "Se alcanzó el limite diario de creditos/puntos de tu API Key en el proveedor.",
-      "Acciones: espera el reinicio de cuota, cambia a otra API Key con saldo, o usa un modelo de menor costo para reducir consumo.",
+      "Se alcanzó el limite diario de solicitudes de tu API Key en el proveedor.",
+      "Acciones: espera el reinicio de cuota o cambia a otra API Key disponible.",
       "Tip: verifica tu uso actual en /api/v1/user dentro del panel del proveedor."
     ].join("\n");
   }
@@ -420,7 +418,6 @@ export default function App() {
           status: normalizedStatus as any,
           created_at: parseTimestampToSeconds(item.created_at || item.created_at_time),
           model: item.model || "seedance-2",
-          credits: item.credits || 60,
           failed_reason: item.failed_reason || item.error || item.message || null,
           input: {
             prompt: item.prompt || item.input?.prompt || "",
@@ -461,46 +458,16 @@ export default function App() {
     }
     
     try {
-      // 1. Fetch from Firestore (latest cache)
-      const fbTasks = await fetchUserTasks(targetUserId);
-      
-      // 2. Fetch from proxy API
+      // Fetch from proxy API
       const apiTasks = await fetchApiTasks();
       
-      // 3. Merge them
-      const combinedMap = new Map<string, VideoTask>();
+      // Sort by created_at descending
+      apiTasks.sort((a, b) => b.created_at - a.created_at);
       
-      fbTasks.forEach((t) => {
-        combinedMap.set(t.id, t);
-      });
-      
-      apiTasks.forEach((apiTask) => {
-        if (apiTask.id) {
-          const existing = combinedMap.get(apiTask.id);
-          if (!existing) {
-            combinedMap.set(apiTask.id, apiTask);
-            // Save newly discovered api task
-            saveTaskDoc(targetUserId, apiTask).catch(e => console.error("Error saving newly discovered API task:", e));
-          } else {
-            // Update if existing is pending but API is finished
-            const isExistingPending = existing.status === "queued" || existing.status === "generating";
-            const isApiFinished = apiTask.status === "completed" || apiTask.status === "failed";
-            if (isExistingPending && isApiFinished) {
-              const merged = { ...existing, ...apiTask };
-              combinedMap.set(apiTask.id, merged);
-              saveTaskDoc(targetUserId, merged).catch(e => console.error("Error saving updated API task status:", e));
-            }
-          }
-        }
-      });
-      
-      const finalTasks = Array.from(combinedMap.values());
-      finalTasks.sort((a, b) => b.created_at - a.created_at);
-      
-      setTasks(finalTasks);
+      setTasks(apiTasks);
 
       // Start polling for any unfinished tasks
-      finalTasks.forEach((task) => {
+      apiTasks.forEach((task) => {
         if (task.status === "queued" || task.status === "generating") {
           startPollingTask(task.id, targetUserId);
         }
@@ -535,10 +502,8 @@ export default function App() {
             fetchMultiKeyStatus();
           }
           
-          // Auto-open API Key input panel if no credentials found
-          if (!data.hasApiKey && !apiKey) {
-            setShowApiKeyPanel(true);
-          }
+          // Note: API keys now managed exclusively via .env (multi-key system)
+          // UI input panel disabled - all keys loaded from environment variables
         }
       } catch (err) {
         console.error("Failed to check server config", err);
@@ -573,28 +538,31 @@ export default function App() {
     return () => clearInterval(interval);
   }, [showMultiKeyMonitor]);
 
-  // Initialize Firebase and load user specific data
+  // Initialize Supabase and load user specific data
   useEffect(() => {
     const loadCloudData = async () => {
       try {
-        const { user } = await initFirebase();
-        setUserId(user.uid);
+        const { userId: uid } = await initSupabase();
+        setUserId(uid);
 
-        // Fetch characters, props, and locations
-        const { characters: fbChars, props: fbProps, locations: fbLocs } = await fetchUserAssets(user.uid);
-        setCharacters(fbChars);
-        setProps(fbProps);
-        setLocations(fbLocs);
+        // Fetch characters, props, and locations from Supabase
+        const [sbChars, sbProps, sbLocs, sbFrames] = await Promise.all([
+          getCharacters(uid),
+          getProps(uid),
+          getLocations(uid),
+          getReferenceFrames(uid),
+        ]);
 
-        // Fetch reference frames
-        const fbFrames = await fetchUserReferenceFrames(user.uid);
-        setReferenceFrames(fbFrames);
+        setCharacters(sbChars);
+        setProps(sbProps);
+        setLocations(sbLocs);
+        setReferenceFrames(sbFrames);
 
-        // Fetch and sync video tasks from the proxy API & Firestore
-        await syncHistoryWithApi(user.uid);
+        // Sync video tasks from the proxy API (no longer stored in database)
+        await syncHistoryWithApi(uid);
       } catch (err) {
-        console.error("Firebase startup failed:", err);
-        setErrorNotification("Fallo la inicialización de base de datos en la nube. Usando datos de respaldo.");
+        console.error("Supabase startup failed:", err);
+        setErrorNotification("Fallo la inicialización de base de datos. Usando datos de respaldo.");
       } finally {
         setIsFirebaseLoading(false);
       }
@@ -651,11 +619,6 @@ export default function App() {
           return t;
         });
       });
-
-      // Save task status progress to Firestore securely in the main async flow
-      if (updatedTask && targetUserId) {
-        await saveTaskDoc(targetUserId, updatedTask).catch(e => console.error("Error saving task progress to Firestore:", e));
-      }
 
       // Clear polling if finished
       if (taskData.status === "completed" || taskData.status === "failed") {
@@ -733,7 +696,7 @@ export default function App() {
     setCharacters(prev => prev.filter(c => c.id !== id));
     if (userId) {
       try {
-        await deleteCharacterDoc(userId, id);
+        await deleteCharacter(userId, id);
       } catch (e) {
         console.error("Error deleting character from cloud:", e);
       }
@@ -744,7 +707,7 @@ export default function App() {
     setProps(prev => prev.filter(p => p.id !== id));
     if (userId) {
       try {
-        await deletePropDoc(userId, id);
+        await deleteProp(userId, id);
       } catch (e) {
         console.error("Error deleting prop from cloud:", e);
       }
@@ -755,7 +718,7 @@ export default function App() {
     setLocations(prev => prev.filter(l => l.id !== id));
     if (userId) {
       try {
-        await deleteLocationDoc(userId, id);
+        await deleteLocation(userId, id);
       } catch (e) {
         console.error("Error deleting location from cloud:", e);
       }
@@ -781,7 +744,7 @@ export default function App() {
     setReferenceFrames(prev => prev.filter(f => f.id !== id));
     if (userId) {
       try {
-        await deleteReferenceFrameDoc(userId, id);
+        await deleteReferenceFrame(userId, id);
       } catch (e) {
         console.error("Error deleting reference frame from cloud:", e);
       }
@@ -870,7 +833,6 @@ export default function App() {
           status: "queued",
           created_at: Math.floor(Date.now() / 1000),
           model,
-          credits: data.credits || 60,
           failed_reason: null,
           input,
           sceneTitle,
@@ -878,13 +840,6 @@ export default function App() {
           data: null
         };
         setTasks(prev => [newTask, ...prev]);
-        if (userId) {
-          try {
-            await saveTaskDoc(userId, newTask);
-          } catch (e) {
-            console.error("Error saving new task to Firestore:", e);
-          }
-        }
         startPollingTask(data.taskId, userId);
         return true;
       }
@@ -1350,10 +1305,8 @@ export default function App() {
             `Fallo al crear el render para el Shot ${clip.clipNumber}`
           );
 
-          // Auto-open API Key panel if authentication/key error is encountered
-          if (res.status === 401 || errorMsg.toLowerCase().includes("api key") || errorMsg.toLowerCase().includes("unauthorized") || errorMsg.toLowerCase().includes("invalid")) {
-            setShowApiKeyPanel(true);
-          }
+          // Note: API key errors now handled by multi-key system
+          // Keys are managed exclusively via .env configuration
 
           throw new Error(errorMsg);
         }
@@ -1365,7 +1318,6 @@ export default function App() {
           status: "queued",
           created_at: Math.floor(Date.now() / 1000),
           model: model,
-          credits: data.credits || 60,
           failed_reason: null,
           input: inputPayload,
           sceneTitle: blueprint.sceneTitle,
@@ -1374,9 +1326,6 @@ export default function App() {
         };
 
         setTasks(prev => [newTask, ...prev]);
-        if (userId) {
-          await saveTaskDoc(userId, newTask).catch(e => console.error("Error saving task to Firestore:", e));
-        }
         startPollingTask(taskId, userId);
 
         // Wait/poll for completion of this shot
@@ -1454,10 +1403,6 @@ export default function App() {
   const anyActivePolling = Object.keys(isPollingMap).some(key => isPollingMap[key]);
   const activeTask = tasks.find(t => t.id === selectedTaskId) || tasks[0];
 
-  const startCredits = 5000;
-  const usedCredits = tasks.reduce((sum, t) => sum + (t.credits || 60), 0);
-  const remainingCredits = Math.max(0, startCredits - usedCredits);
-
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-background text-on-background font-sans selection:bg-primary-container/30 selection:text-white" id="root-layout">
       
@@ -1514,11 +1459,6 @@ export default function App() {
 
         {/* Toolbar Controls / Actions */}
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 bg-[#d1f025]/10 px-3 py-1.5 rounded-lg border border-[#d1f025]/20 font-mono text-xs text-[#d1f025]">
-            <span>⚡</span>
-            <span className="font-bold">{remainingCredits.toLocaleString()} Créditos</span>
-          </div>
-          
           <button 
             type="button"
             onClick={() => {
@@ -1758,11 +1698,6 @@ export default function App() {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {/* Cost/Credits consumed */}
-                              <span className="flex items-center text-[10px] font-bold text-gray-400 bg-black/40 border border-white/5 px-2 py-0.5 rounded-md">
-                                ⚡ {task.credits || 60} Credits
-                              </span>
-
                               {/* Status Badges */}
                               {isCompleted && (
                                 <span className="flex items-center text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
