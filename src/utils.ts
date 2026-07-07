@@ -226,7 +226,7 @@ export function compileFinalPrompt(
   // This ensures @lia ALWAYS gets the same [ImageX] number
   const mentionedAssets = new Set<string>(); // Set of UUIDs
   const tempPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
-  for (const match of compiled.matchAll(tempPattern)) {
+  for (const match of rawPrompt.matchAll(tempPattern)) {
     const normalized = normalizeForMatching(match[1]);
     const assetInfo = assetLookup.get(normalized);
     if (assetInfo && refImages.length > 0) {
