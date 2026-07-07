@@ -17,6 +17,20 @@ export function getAssetHandle(name: string): string {
 }
 
 /**
+ * Normalizes a string for fuzzy matching:
+ * - Removes accents (á→a, é→e, ñ→n)
+ * - Converts to lowercase
+ * - Removes special characters
+ */
+function normalizeForMatching(text: string): string {
+  return text
+    .normalize("NFD") // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritical marks
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Compiles Higgsfield-style camera settings into a descriptive prompt fragment
  */
 export function compileCameraPrompt(settings: CameraSettings): string {
@@ -111,44 +125,41 @@ export function harvestAndSortRefImages(
 ): string[] {
   const imageUrls: string[] = [];
   
-  // Create a map of all assets by their handles and names (case-insensitive)
-  const assetMap = new Map<string, string>(); // key: handle/name (lowercase), value: imageUrl
+  // Create a UUID-based map for precise asset lookup
+  // Maps normalized name → { uuid, imageUrl }
+  const assetMap = new Map<string, { uuid: string; imageUrl: string }>(); 
   
   characters.forEach(c => {
     if (!c.avatarUrl) return;
-    const handle = getAssetHandle(c.name).toLowerCase();
-    const name = c.name.toLowerCase();
-    assetMap.set(handle, c.avatarUrl);
-    assetMap.set(name, c.avatarUrl);
+    const normalized = normalizeForMatching(c.name);
+    assetMap.set(normalized, { uuid: c.id, imageUrl: c.avatarUrl });
   });
   
   props.forEach(p => {
     if (!p.imageUrl) return;
-    const handle = getAssetHandle(p.name).toLowerCase();
-    const name = p.name.toLowerCase();
-    assetMap.set(handle, p.imageUrl);
-    assetMap.set(name, p.imageUrl);
+    const normalized = normalizeForMatching(p.name);
+    assetMap.set(normalized, { uuid: p.id, imageUrl: p.imageUrl });
   });
   
   locations.forEach(l => {
     if (!l.imageUrl) return;
-    const handle = getAssetHandle(l.name).toLowerCase();
-    const name = l.name.toLowerCase();
-    assetMap.set(handle, l.imageUrl);
-    assetMap.set(name, l.imageUrl);
+    const normalized = normalizeForMatching(l.name);
+    assetMap.set(normalized, { uuid: l.id, imageUrl: l.imageUrl });
   });
   
   // Find all @mentions in order (including duplicates)
-  // Match @word or standalone names that match our assets
-  const mentionPattern = /@(\w+)/g;
+  // Match @word (letters, numbers, accents)
+  const mentionPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
   const matches = prompt.matchAll(mentionPattern);
   
   for (const match of matches) {
-    const mentionText = match[1].toLowerCase(); // e.g., "lia" from "@lia"
-    const imageUrl = assetMap.get(mentionText);
+    const mentionText = match[1]; // e.g., "lia" or "Lía" from "@lia" or "@Lía"
+    const normalized = normalizeForMatching(mentionText);
+    const assetData = assetMap.get(normalized);
     
-    if (imageUrl) {
-      imageUrls.push(imageUrl);
+    if (assetData) {
+      console.log(`[UUID Match] @${mentionText} → UUID: ${assetData.uuid}`);
+      imageUrls.push(assetData.imageUrl);
     }
   }
   
@@ -176,40 +187,47 @@ export function compileFinalPrompt(
   // Detect if the prompt contains Spanish words or characters
   const isSpanish = /[áéíóúüñ]/.test(rawPrompt) || /\b(el|la|los|las|un|una|en|de|con|para|por|como|que|y|o)\b/i.test(rawPrompt);
 
-  // Create lookup maps for all assets
-  const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; asset: any }>();
+  // Create UUID-based lookup maps for all assets
+  // Uses normalized names for fuzzy matching (handles accents, case, etc.)
+  const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; uuid: string; asset: any }>();
   
   characters.forEach(c => {
-    const handle = getAssetHandle(c.name).toLowerCase();
-    assetLookup.set(handle, { type: 'character', asset: c });
+    const normalized = normalizeForMatching(c.name);
+    assetLookup.set(normalized, { type: 'character', uuid: c.id, asset: c });
   });
   
   props.forEach(p => {
-    const handle = getAssetHandle(p.name).toLowerCase();
-    assetLookup.set(handle, { type: 'prop', asset: p });
+    const normalized = normalizeForMatching(p.name);
+    assetLookup.set(normalized, { type: 'prop', uuid: p.id, asset: p });
   });
   
   locations.forEach(l => {
-    const handle = getAssetHandle(l.name).toLowerCase();
-    assetLookup.set(handle, { type: 'location', asset: l });
+    const normalized = normalizeForMatching(l.name);
+    assetLookup.set(normalized, { type: 'location', uuid: l.id, asset: l });
   });
 
   // Process all @mentions sequentially, replacing them with enriched descriptions + [ImageX]
   let compiled = rawPrompt;
   let imageIndex = 0; // Tracks current position in refImages array
   
-  // Find all @mentions in order
-  const mentionPattern = /@(\w+)/g;
+  // Find all @mentions in order (supports accents: @lia, @Lía, etc.)
+  const mentionPattern = /@([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ0-9]+)/g;
   const matches = [...compiled.matchAll(mentionPattern)];
   
   // Process from right to left to preserve string indices
   for (let i = matches.length - 1; i >= 0; i--) {
     const match = matches[i];
-    const mentionHandle = `@${match[1].toLowerCase()}`; // e.g., "@lia"
+    const mentionText = match[1]; // e.g., "lia" or "Lía"
+    const normalized = normalizeForMatching(mentionText);
     const matchIndex = match.index!;
     const matchText = match[0]; // e.g., "@lia"
     
-    const assetInfo = assetLookup.get(mentionHandle);
+    const assetInfo = assetLookup.get(normalized);
+    
+    // Debug logging with UUID
+    if (assetInfo) {
+      console.log(`[UUID Compile] @${mentionText} → UUID: ${assetInfo.uuid} (${assetInfo.type})`);
+    }
     
     if (!assetInfo) {
       // Not a recognized asset, leave as-is
@@ -226,8 +244,9 @@ export function compileFinalPrompt(
     let imageIndexForThisMention = 0;
     
     for (const prevMatch of mentionsBeforeThis) {
-      const prevHandle = `@${prevMatch[1].toLowerCase()}`;
-      const prevAssetInfo = assetLookup.get(prevHandle);
+      const prevMentionText = prevMatch[1];
+      const prevNormalized = normalizeForMatching(prevMentionText);
+      const prevAssetInfo = assetLookup.get(prevNormalized);
       
       if (prevAssetInfo) {
         const prevAsset = prevAssetInfo.asset;
