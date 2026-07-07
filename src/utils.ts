@@ -33,6 +33,26 @@ function normalizeForMatching(text: string): string {
 /**
  * Compiles Higgsfield-style camera settings into a descriptive prompt fragment
  */
+// Character height proportions for the animated series (in meters)
+const CHARACTER_HEIGHTS: Record<string, string> = {
+  "lia": "1 meter tall",
+  "noah": "1 meter tall", 
+  "tomas": "1.7 meters tall",
+  "tomás": "1.7 meters tall",
+  "coco": "0.6 meters tall"
+};
+
+// Location and prop scale proportions for the animated series
+const LOCATION_PROPORTIONS: Record<string, string> = {
+  "isla": "tropical beach setting with wooden dock, house door is 2 meters tall (taller than Tomás)",
+  "island": "tropical beach setting with wooden dock, house door is 2 meters tall (taller than Tomás)",
+  "casa": "wooden cabin, main door is 2 meters tall (taller than Tomás)",
+  "house": "wooden cabin, main door is 2 meters tall (taller than Tomás)"
+};
+
+// Base animated series visual style - ALWAYS applied
+const SERIES_BASE_STYLE = "high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering";
+
 export function compileCameraPrompt(settings: CameraSettings): string {
   const parts: string[] = [];
 
@@ -40,19 +60,19 @@ export function compileCameraPrompt(settings: CameraSettings): string {
   let timeOfDayPrompt = "";
   switch (settings.timeOfDay) {
     case "dawn":
-      timeOfDayPrompt = "soft early morning light, pink and orange sky glow, gentle sunrise atmosphere, mist and dew, peaceful dawn ambiance";
+      timeOfDayPrompt = "soft golden sunrise, warm peachy-orange sky with pink and purple gradient, gentle morning glow on characters faces, long soft shadows on sand, crystal-clear turquoise water with golden reflections, magical nostalgic atmosphere, early dawn lighting 6am";
       break;
     case "day":
-      timeOfDayPrompt = "bright daylight, clear blue sky, vibrant colors, strong natural lighting, high sun visibility";
+      timeOfDayPrompt = "bright midday sunlight, clear vibrant blue sky with defined white clouds, strong natural overhead lighting, highly saturated tropical colors, sparkling turquoise ocean water, sharp but soft shadows, high noon 12pm lighting, energetic daylight atmosphere";
       break;
     case "afternoon":
-      timeOfDayPrompt = "warm afternoon sunlight, golden hour beginning, soft shadows lengthening, comfortable warm tones";
+      timeOfDayPrompt = "warm late afternoon golden hour light, honey-toned sunlight at 45-degree angle, lengthening soft shadows, comfortable warm color temperature, beginning of magic hour, 4pm lighting with golden rim lights on characters";
       break;
     case "sunset":
-      timeOfDayPrompt = "dramatic sunset lighting, deep orange and purple sky, long shadows, golden rim light, magical hour glow";
+      timeOfDayPrompt = "dramatic cinematic sunset, deep orange and coral sky blending into soft purple clouds, golden hour rim lighting on characters silhouettes, long romantic shadows, glowing horizon over turquesa water, magical ethereal 6pm atmosphere, warm nostalgic glow";
       break;
     case "night":
-      timeOfDayPrompt = "nighttime atmosphere, moonlight or artificial lights, deep shadows, cool blue tones, starry sky if outdoors";
+      timeOfDayPrompt = "nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood";
       break;
   }
 
@@ -136,6 +156,9 @@ export function compileCameraPrompt(settings: CameraSettings): string {
   }
 
   // Final compilation
+  // Always start with base series style
+  parts.push(SERIES_BASE_STYLE);
+  
   // Always include time of day
   parts.push(timeOfDayPrompt);
 
@@ -344,6 +367,12 @@ export function compileFinalPrompt(
       if (char.clothing) details.push(char.clothing.trim());
       if (char.gender) details.push(char.gender.trim());
       
+      // Add character height proportion from the series bible
+      const heightInfo = CHARACTER_HEIGHTS[normalized];
+      if (heightInfo) {
+        details.push(heightInfo);
+      }
+      
       const detailsStr = details.filter(Boolean).join(", ");
       const detailsSuffix = detailsStr ? ` (${detailsStr})` : "";
       
@@ -377,7 +406,14 @@ export function compileFinalPrompt(
       hasImage = !!loc.imageUrl;
       
       const desc = loc.description ? loc.description.trim() : "";
-      const descSuffix = desc ? ` (${desc})` : "";
+      
+      // Add location proportions from the series bible
+      const proportionInfo = LOCATION_PROPORTIONS[normalized];
+      const descWithProportions = proportionInfo 
+        ? (desc ? `${desc}, ${proportionInfo}` : proportionInfo)
+        : desc;
+      
+      const descSuffix = descWithProportions ? ` (${descWithProportions})` : "";
       
       let refToken = "";
       if (hasImage && imageIndexForThisMention > 0) {
