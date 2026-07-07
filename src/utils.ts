@@ -98,6 +98,10 @@ export function compileCameraPrompt(settings: CameraSettings): string {
 /**
  * Harvests reference images from characters, props, and locations mentioned in the prompt,
  * and sorts them by the order they appear in the prompt text.
+ * 
+ * IMPORTANT: This function preserves the EXACT order of mentions in the prompt.
+ * Each mention gets its own slot in the image array, even if it's the same asset.
+ * This ensures [Image1], [Image2], etc. in the compiled prompt match image_urls[0], image_urls[1], etc.
  */
 export function harvestAndSortRefImages(
   prompt: string,
@@ -105,63 +109,58 @@ export function harvestAndSortRefImages(
   props: PropAsset[],
   locations: LocationAsset[]
 ): string[] {
-  const detected: Array<{ imageUrl: string; index: number }> = [];
-  const lowercasePrompt = prompt.toLowerCase();
-
-  // Helper to find the first occurrence index of either handle or raw name
-  const getMinIndex = (name: string): number => {
-    const handle = getAssetHandle(name).toLowerCase();
-    const plain = name.toLowerCase();
-    
-    const handleIdx = lowercasePrompt.indexOf(handle);
-    const plainIdx = lowercasePrompt.indexOf(plain);
-    
-    if (handleIdx !== -1 && plainIdx !== -1) {
-      return Math.min(handleIdx, plainIdx);
-    }
-    if (handleIdx !== -1) return handleIdx;
-    if (plainIdx !== -1) return plainIdx;
-    return -1;
-  };
-
+  const imageUrls: string[] = [];
+  
+  // Create a map of all assets by their handles and names (case-insensitive)
+  const assetMap = new Map<string, string>(); // key: handle/name (lowercase), value: imageUrl
+  
   characters.forEach(c => {
     if (!c.avatarUrl) return;
-    const idx = getMinIndex(c.name);
-    if (idx !== -1) {
-      if (!detected.some(item => item.imageUrl === c.avatarUrl)) {
-        detected.push({ imageUrl: c.avatarUrl, index: idx });
-      }
-    }
+    const handle = getAssetHandle(c.name).toLowerCase();
+    const name = c.name.toLowerCase();
+    assetMap.set(handle, c.avatarUrl);
+    assetMap.set(name, c.avatarUrl);
   });
-
+  
   props.forEach(p => {
     if (!p.imageUrl) return;
-    const idx = getMinIndex(p.name);
-    if (idx !== -1) {
-      if (!detected.some(item => item.imageUrl === p.imageUrl)) {
-        detected.push({ imageUrl: p.imageUrl, index: idx });
-      }
-    }
+    const handle = getAssetHandle(p.name).toLowerCase();
+    const name = p.name.toLowerCase();
+    assetMap.set(handle, p.imageUrl);
+    assetMap.set(name, p.imageUrl);
   });
-
+  
   locations.forEach(l => {
     if (!l.imageUrl) return;
-    const idx = getMinIndex(l.name);
-    if (idx !== -1) {
-      if (!detected.some(item => item.imageUrl === l.imageUrl)) {
-        detected.push({ imageUrl: l.imageUrl, index: idx });
-      }
-    }
+    const handle = getAssetHandle(l.name).toLowerCase();
+    const name = l.name.toLowerCase();
+    assetMap.set(handle, l.imageUrl);
+    assetMap.set(name, l.imageUrl);
   });
-
-  // Sort by index of appearance in the prompt
-  detected.sort((a, b) => a.index - b.index);
-
-  return detected.map(item => item.imageUrl);
+  
+  // Find all @mentions in order (including duplicates)
+  // Match @word or standalone names that match our assets
+  const mentionPattern = /@(\w+)/g;
+  const matches = prompt.matchAll(mentionPattern);
+  
+  for (const match of matches) {
+    const mentionText = match[1].toLowerCase(); // e.g., "lia" from "@lia"
+    const imageUrl = assetMap.get(mentionText);
+    
+    if (imageUrl) {
+      imageUrls.push(imageUrl);
+    }
+  }
+  
+  // Limit to 9 images (VideoGenAPI constraint)
+  return imageUrls.slice(0, 9);
 }
 
 /**
- * Combines the user raw prompt, compiles the camera motions, and expands asset tags
+ * Combines the user raw prompt, compiles the camera motions, and expands asset tags.
+ * 
+ * IMPROVED: Processes @mentions sequentially left-to-right, ensuring each mention
+ * gets its own [ImageX] reference that matches the image_urls array index.
  */
 export function compileFinalPrompt(
   rawPrompt: string,
@@ -172,24 +171,81 @@ export function compileFinalPrompt(
   selectedRefImages?: string[],
   hasReferenceVideo?: boolean
 ): { compiled: string; cameraPrompt: string } {
-  let compiled = rawPrompt;
   const refImages = selectedRefImages ? selectedRefImages.slice(0, 9) : [];
 
   // Detect if the prompt contains Spanish words or characters
   const isSpanish = /[áéíóúüñ]/.test(rawPrompt) || /\b(el|la|los|las|un|una|en|de|con|para|por|como|que|y|o)\b/i.test(rawPrompt);
 
-  // 1. Replace character handles and names with robust and rich visual attributes and Seedance [ImageX] references
-  characters.forEach((char) => {
-    const handle = getAssetHandle(char.name);
-    const escapedHandle = handle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const escapedName = char.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    // Match either the handle (e.g. @Juan) or the plain name as a whole word (e.g. Juan)
-    const regex = new RegExp(`${escapedHandle}|\\b${escapedName}\\b`, "gi");
+  // Create lookup maps for all assets
+  const assetLookup = new Map<string, { type: 'character' | 'prop' | 'location'; asset: any }>();
+  
+  characters.forEach(c => {
+    const handle = getAssetHandle(c.name).toLowerCase();
+    assetLookup.set(handle, { type: 'character', asset: c });
+  });
+  
+  props.forEach(p => {
+    const handle = getAssetHandle(p.name).toLowerCase();
+    assetLookup.set(handle, { type: 'prop', asset: p });
+  });
+  
+  locations.forEach(l => {
+    const handle = getAssetHandle(l.name).toLowerCase();
+    assetLookup.set(handle, { type: 'location', asset: l });
+  });
+
+  // Process all @mentions sequentially, replacing them with enriched descriptions + [ImageX]
+  let compiled = rawPrompt;
+  let imageIndex = 0; // Tracks current position in refImages array
+  
+  // Find all @mentions in order
+  const mentionPattern = /@(\w+)/g;
+  const matches = [...compiled.matchAll(mentionPattern)];
+  
+  // Process from right to left to preserve string indices
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i];
+    const mentionHandle = `@${match[1].toLowerCase()}`; // e.g., "@lia"
+    const matchIndex = match.index!;
+    const matchText = match[0]; // e.g., "@lia"
     
-    compiled = compiled.replace(regex, (match, offset) => {
-      // Check if there is already an "Imagen X", "Image X", or "[ImageX]" within the next 35 characters
-      const subsequentText = compiled.slice(offset + match.length, offset + match.length + 35).toLowerCase();
-      const hasExistingRef = /\b(imagen|image|img|imágen)\b/i.test(subsequentText) || /\[image/i.test(subsequentText);
+    const assetInfo = assetLookup.get(mentionHandle);
+    
+    if (!assetInfo) {
+      // Not a recognized asset, leave as-is
+      continue;
+    }
+    
+    const { type, asset } = assetInfo;
+    let replacement = "";
+    let hasImage = false;
+    
+    // Calculate the actual image index for THIS specific mention
+    // We need to count how many @mentions with images appear BEFORE this one
+    const mentionsBeforeThis = matches.slice(0, i);
+    let imageIndexForThisMention = 0;
+    
+    for (const prevMatch of mentionsBeforeThis) {
+      const prevHandle = `@${prevMatch[1].toLowerCase()}`;
+      const prevAssetInfo = assetLookup.get(prevHandle);
+      
+      if (prevAssetInfo) {
+        const prevAsset = prevAssetInfo.asset;
+        const prevHasImage = 
+          (prevAssetInfo.type === 'character' && prevAsset.avatarUrl) ||
+          (prevAssetInfo.type === 'prop' && prevAsset.imageUrl) ||
+          (prevAssetInfo.type === 'location' && prevAsset.imageUrl);
+        
+        if (prevHasImage) {
+          imageIndexForThisMention++;
+        }
+      }
+    }
+    
+    // Build replacement text based on asset type
+    if (type === 'character') {
+      const char = asset as CharacterAsset;
+      hasImage = !!char.avatarUrl;
       
       const details: string[] = [];
       if (char.description) details.push(char.description.trim());
@@ -201,86 +257,56 @@ export function compileFinalPrompt(
       const detailsSuffix = detailsStr ? ` (${detailsStr})` : "";
       
       let refToken = "";
-      if (char.avatarUrl && !hasExistingRef) {
-        const idx = refImages.indexOf(char.avatarUrl);
-        if (idx !== -1) {
-          refToken = isSpanish 
-            ? ` [Image${idx + 1}] (de la Imagen ${idx + 1})` 
-            : ` [Image${idx + 1}]`;
-        }
+      if (hasImage && imageIndexForThisMention < refImages.length) {
+        refToken = isSpanish 
+          ? ` [Image${imageIndexForThisMention + 1}]` 
+          : ` [Image${imageIndexForThisMention + 1}]`;
       }
 
-      if (isSpanish) {
-        return `${char.name}${refToken}${detailsSuffix}`;
-      } else {
-        return `character named ${char.name}${refToken}${detailsSuffix}`;
-      }
-    });
-  });
-
-  // 2. Replace prop handles and names and Seedance [ImageX] references
-  props.forEach((prop) => {
-    const handle = getAssetHandle(prop.name);
-    const escapedHandle = handle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const escapedName = prop.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`${escapedHandle}|\\b${escapedName}\\b`, "gi");
-    
-    compiled = compiled.replace(regex, (match, offset) => {
-      const subsequentText = compiled.slice(offset + match.length, offset + match.length + 35).toLowerCase();
-      const hasExistingRef = /\b(imagen|image|img|imágen)\b/i.test(subsequentText) || /\[image/i.test(subsequentText);
+      replacement = isSpanish 
+        ? `${char.name}${refToken}${detailsSuffix}`
+        : `character named ${char.name}${refToken}${detailsSuffix}`;
+        
+    } else if (type === 'prop') {
+      const prop = asset as PropAsset;
+      hasImage = !!prop.imageUrl;
       
       const desc = prop.description ? prop.description.trim() : "";
       const descSuffix = desc ? ` (${desc})` : "";
       
       let refToken = "";
-      if (prop.imageUrl && !hasExistingRef) {
-        const idx = refImages.indexOf(prop.imageUrl);
-        if (idx !== -1) {
-          refToken = isSpanish 
-            ? ` [Image${idx + 1}] (de la Imagen ${idx + 1})` 
-            : ` [Image${idx + 1}]`;
-        }
+      if (hasImage && imageIndexForThisMention < refImages.length) {
+        refToken = isSpanish 
+          ? ` [Image${imageIndexForThisMention + 1}]` 
+          : ` [Image${imageIndexForThisMention + 1}]`;
       }
 
-      if (isSpanish) {
-        return `el objeto ${prop.name}${refToken}${descSuffix}`;
-      } else {
-        return `prop: ${prop.name}${refToken}${descSuffix}`;
-      }
-    });
-  });
-
-  // 3. Replace location handles and names and Seedance [ImageX] references
-  locations.forEach((loc) => {
-    const handle = getAssetHandle(loc.name);
-    const escapedHandle = handle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const escapedName = loc.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`${escapedHandle}|\\b${escapedName}\\b`, "gi");
-    
-    compiled = compiled.replace(regex, (match, offset) => {
-      const subsequentText = compiled.slice(offset + match.length, offset + match.length + 35).toLowerCase();
-      const hasExistingRef = /\b(imagen|image|img|imágen)\b/i.test(subsequentText) || /\[image/i.test(subsequentText);
+      replacement = isSpanish 
+        ? `el objeto ${prop.name}${refToken}${descSuffix}`
+        : `prop: ${prop.name}${refToken}${descSuffix}`;
+        
+    } else if (type === 'location') {
+      const loc = asset as LocationAsset;
+      hasImage = !!loc.imageUrl;
       
       const desc = loc.description ? loc.description.trim() : "";
       const descSuffix = desc ? ` (${desc})` : "";
       
       let refToken = "";
-      if (loc.imageUrl && !hasExistingRef) {
-        const idx = refImages.indexOf(loc.imageUrl);
-        if (idx !== -1) {
-          refToken = isSpanish 
-            ? ` [Image${idx + 1}] (de la Imagen ${idx + 1})` 
-            : ` [Image${idx + 1}]`;
-        }
+      if (hasImage && imageIndexForThisMention < refImages.length) {
+        refToken = isSpanish 
+          ? ` [Image${imageIndexForThisMention + 1}]` 
+          : ` [Image${imageIndexForThisMention + 1}]`;
       }
 
-      if (isSpanish) {
-        return `en la locación ${loc.name}${refToken}${descSuffix}`;
-      } else {
-        return `at the location ${loc.name}${refToken}${descSuffix}`;
-      }
-    });
-  });
+      replacement = isSpanish 
+        ? `en la locación ${loc.name}${refToken}${descSuffix}`
+        : `at the location ${loc.name}${refToken}${descSuffix}`;
+    }
+    
+    // Replace this specific occurrence
+    compiled = compiled.substring(0, matchIndex) + replacement + compiled.substring(matchIndex + matchText.length);
+  }
 
   // 4. Compile camera motion prompt
   const cameraPrompt = compileCameraPrompt(cameraSettings);
