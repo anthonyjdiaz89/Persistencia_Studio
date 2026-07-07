@@ -829,16 +829,33 @@ export default function App() {
     retryCount: number = 0
   ): Promise<boolean> => {
     const maxRetries = 3;
+    const fetchTimeout = 30000; // 30 seconds timeout
+    
+    console.log(`[Generation] Attempt ${retryCount + 1}/${maxRetries + 1}: Sending request to /api/seedance/generations`);
+    
     try {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error(`[Generation] Request timeout after ${fetchTimeout/1000}s`);
+        controller.abort();
+      }, fetchTimeout);
+      
       const res = await fetch("/api/seedance/generations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ model, input })
+        body: JSON.stringify({ model, input }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
+      console.log(`[Generation] Response received:`, { status: res.status, ok: res.ok });
 
       const data = await res.json();
+      console.log(`[Generation] Response data:`, data);
 
       // Update rate limit info from response if present
       if (data.rate_limit) {
@@ -889,13 +906,30 @@ export default function App() {
       setErrorNotification("Respuesta inesperada del servidor.");
       return false;
     } catch (err: any) {
+      // Handle abort/timeout errors
+      if (err.name === 'AbortError') {
+        console.error(`[Request Timeout] Request took longer than ${fetchTimeout/1000}s`);
+        if (retryCount < maxRetries) {
+          const waitMs = (2 ** retryCount) * 2000;
+          console.log(`[Timeout] Retry ${retryCount + 1}/${maxRetries} after ${Math.ceil(waitMs / 1000)}s`);
+          setErrorNotification(`Timeout de conexión. Reintentando en ${Math.ceil(waitMs / 1000)}s...`);
+          await sleep(waitMs);
+          return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
+        }
+        setErrorNotification("La solicitud tardó demasiado tiempo. Verifica tu conexión a internet o intenta más tarde.");
+        return false;
+      }
+      
+      // Handle other network errors
       if (retryCount < maxRetries) {
         const waitMs = (2 ** retryCount) * 2000;
         console.log(`[Network Error] Retry ${retryCount + 1}/${maxRetries} after ${Math.ceil(waitMs / 1000)}s`);
+        setErrorNotification(`Error de red. Reintentando en ${Math.ceil(waitMs / 1000)}s...`);
         await sleep(waitMs);
         return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
       }
-      setErrorNotification(err.message || "A network error occurred. Please try again.");
+      
+      setErrorNotification(err.message || "Error de red. Verifica tu conexión e intenta de nuevo.");
       return false;
     }
   };
@@ -906,31 +940,39 @@ export default function App() {
     sceneTitle?: string,
     clipNumber?: number
   ) => {
+    console.log("[Generation] Starting video generation:", { model, input, sceneTitle, clipNumber });
     setIsGenerating(true);
     setErrorNotification(null);
 
-    // Add small delay between requests to avoid immediate rate limit hits (request spacing)
-    if (tasks.length > 0) {
-      const lastTaskTime = tasks[0]?.created_at || 0;
-      const timeSinceLastMs = Date.now() - (lastTaskTime * 1000);
-      if (timeSinceLastMs < 2000) {
-        await sleep(2000 - timeSinceLastMs);
+    try {
+      // Add small delay between requests to avoid immediate rate limit hits (request spacing)
+      if (tasks.length > 0) {
+        const lastTaskTime = tasks[0]?.created_at || 0;
+        const timeSinceLastMs = Date.now() - (lastTaskTime * 1000);
+        if (timeSinceLastMs < 2000) {
+          await sleep(2000 - timeSinceLastMs);
+        }
       }
+
+      const success = await executeGenerationWithRetry(input, model, sceneTitle, clipNumber, 0);
+
+      if (!success) {
+        console.log("[Generation] Failed after retries");
+        return;
+      }
+
+      // On success, update UI state
+      setSelectedTaskId(tasks[0]?.id || "");
+      setActiveTab("studio");
+      setSuccessToast("New video generation queued successfully! Watch render progress below.");
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      console.error("[Generation] Unexpected error:", err);
+      setErrorNotification(err.message || "Error inesperado al generar el video. Por favor, intenta de nuevo.");
+    } finally {
+      // ALWAYS reset isGenerating, even if there's an error
+      setIsGenerating(false);
     }
-
-    const success = await executeGenerationWithRetry(input, model, sceneTitle, clipNumber, 0);
-    setIsGenerating(false);
-
-    if (!success) {
-      console.log("[Generation] Failed after retries");
-      return;
-    }
-
-    // On success, update UI state
-    setSelectedTaskId(tasks[0]?.id || "");
-    setActiveTab("studio");
-    setSuccessToast("New video generation queued successfully! Watch render progress below.");
-    setTimeout(() => setSuccessToast(null), 5000);
   };
 
   // 12. Replay/Reload configuration back into prompt workspace
