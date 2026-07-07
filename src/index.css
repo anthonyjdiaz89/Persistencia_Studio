@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand-orange: #F97316;
+  --color-dark-bg: #0A0A0C;
+  --color-dark-card: #0E0E11;
+  --color-dark-input: #050506;
+  --color-dark-item: #18181B;
+  --color-dark-border: #1F1F23;
+  --color-dark-border-hover: #27272A;
+  --color-text-primary: #E4E4E7;
+  --color-text-secondary: #71717A;
+
+  /* Seedance 2.0 Pro Color Specs */
+  --color-background: #121317;
+  --color-surface: #121317;
+  --color-surface-dim: #121317;
+  --color-surface-container: #1e1f23;
+  --color-surface-container-low: #1a1b1f;
+  --color-surface-container-high: #292a2e;
+  --color-surface-container-highest: #343539;
+  --color-surface-container-lowest: #0d0e12;
+  --color-surface-variant: #343539;
+  --color-outline-variant: #454933;
+  --color-primary-container: #d1f025;
+  --color-on-primary-container: #5c6b00;
+  --color-on-surface: #e3e2e7;
+  --color-on-surface-variant: #c6c9ad;
+  --color-outline: #90937a;
+  --color-secondary: #c8c6c5;
+
+  /* Fonts */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom styles matching Elegant Dark design theme */
+body {
+  background-color: #121317;
+  color: #e3e2e7;
+  font-family: var(--font-sans);
+}
+
+/* Custom dark scrollbar for a polished workspace experience */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2); 
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1); 
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2); 
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: rgba(28, 28, 30, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 15px rgba(209, 240, 37, 0.15);
+}

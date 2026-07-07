@@ -1,0 +1,6 @@
+{
+  "name": "Persistencia Studio",
+  "description": "Generate cinematic videos using Seedance 2.0 API with custom character, prop, location managers, and advanced camera controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

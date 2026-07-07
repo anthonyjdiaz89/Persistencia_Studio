@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Character": {
+      "title": "Character",
+      "description": "Custom character asset defined by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "gender": { "type": "string" },
+        "appearance": { "type": "string" },
+        "clothing": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "name", "userId"]
+    },
+    "Prop": {
+      "title": "Prop",
+      "description": "Custom prop asset defined by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "name", "userId"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Custom location asset defined by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "name", "userId"]
+    },
+    "Task": {
+      "title": "VideoTask",
+      "description": "Video generation task and status tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "number" },
+        "model": { "type": "string" },
+        "credits": { "type": "number" },
+        "failed_reason": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "status", "userId"]
+    }
+  },
+  "firestore": {
+    "/characters/{characterId}": {
+      "schema": "Character",
+      "description": "Collection of user character assets"
+    },
+    "/props/{propId}": {
+      "schema": "Prop",
+      "description": "Collection of user prop assets"
+    },
+    "/locations/{locationId}": {
+      "schema": "Location",
+      "description": "Collection of user location assets"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of video generation tasks"
+    }
+  }
+}
