@@ -39,22 +39,23 @@ import {
   AlertCircle
 } from "lucide-react";
 import { compileFinalPrompt, getAssetHandle } from "../utils";
+import { uploadImageToSupabase } from "../lib/firebase";
 
 export const MODELS_LIST = [
-  { id: "seedance-25", name: "Seedance 2.5", badge: "Destacado", desc: "Diseñado para crear videos cinematográficos de alta calidad con movimiento avanzado, fuerte continuidad y control creativo profesional.", cost: "1080p | 5-30s" },
-  { id: "sora-2", name: "Sora 2 (OpenAI)", badge: "Física", desc: "El mejor modelo para generar videos y audio altamente realistas con simulaciones físicas precisas y diálogo sincronizado.", cost: "1080p | 10-10s" },
-  { id: "veo-31", name: "Veo 3.1 Fast", badge: "Premium", desc: "Modelo de vanguardia de Google que ofrece detalles hiperrealistas y control creativo mejorado para visuales deslumbrantes.", cost: "1080p | 8-8s" },
-  { id: "veo3", name: "Veo 3 Fast", badge: "Premium", desc: "El modelo de generación de video más avanzado de Google con calidad inigualable e increíbles detalles.", cost: "1080p | 8-8s" },
-  { id: "kling-3", name: "Kling 3", badge: "Fama", desc: "Generación de video de primer nivel con fluidez de movimiento inigualable, visuales cinematográficos y precisión de prompt excepcional.", cost: "1080p | 5-10s" },
-  { id: "gemini-omni", name: "Gemini Omni", badge: "Google", desc: "Combina la física avanzada con el conocimiento de ciencia, historia y contexto cultural de Gemini para videos realistas.", cost: "1080p | 4-10s" },
-  { id: "higgsfield_v1", name: "Higgsfield", badge: "Movimiento", desc: "Modelo de IA avanzado con excelente comprensión del movimiento y rendimiento fotorrealista para escenas cinematográficas.", cost: "1080p | 5-15s" },
-  { id: "wan-25", name: "Wan 2.5", badge: "Abierto", desc: "Modelo de IA de código abierto capaz de generar automáticamente videos altamente realistas con audio incorporado.", cost: "1080p | 5-10s" },
-  { id: "grok-imagine-1-5", name: "Grok Imagine 1.5", badge: "xAI", desc: "Modelo de video Grok de xAI, rápido y de alta fidelidad, excelente para prototipado rápido y experimentación creativa.", cost: "1080p | 5-10s" },
-  { id: "seedance-2", name: "Seedance 2 Pro", badge: "Rápido", desc: "Modelo ultrarrápido ideal para experimentación creativa rápida y composición ágil.", cost: "1080p | 5-10s" },
-  { id: "seedance-2-mini", name: "Seedance 2.0 Mini", badge: "Lite", desc: "Modelo ligero construido para la creación rápida y controlable de videos de formato corto con movimiento suave.", cost: "1080p | 5-15s" },
-  { id: "ltxv-2", name: "LTV Video 2", badge: "4K", desc: "Crea videos y audio de alta fidelidad a partir de texto con el nuevo modelo abierto LTXV 2.", cost: "4K | 6-10s" },
-  { id: "nanobanana-video", name: "Nano Banana", badge: "Divertido", desc: "Modelo liviano para generación rápida de videos creativos. Perfecto para clips cortos.", cost: "720p | 5-10s" },
-  { id: "veo2", name: "Veo 2", badge: "Google", desc: "Desarrollado por Google, ideal para generar videos altamente realistas con simulación física sólida.", cost: "1080p | 10-10s" },
+  { id: "seedance-25", name: "Seedance 2.5", badge: "Destacado", desc: "Diseñado para crear videos cinematográficos de alta calidad con movimiento avanzado, fuerte continuidad y control creativo profesional.", cost: "720p-1080p | 5-30s" },
+  { id: "sora-2", name: "Sora 2 (OpenAI)", badge: "Física", desc: "El mejor modelo para generar videos y audio altamente realistas con simulaciones físicas precisas y diálogo sincronizado.", cost: "1080p | 10s" },
+  { id: "veo-31", name: "Veo 3.1 Fast", badge: "Premium", desc: "Modelo de vanguardia de Google que ofrece detalles hiperrealistas y control creativo mejorado para visuales deslumbrantes.", cost: "720p-1080p | 8s" },
+  { id: "veo3", name: "Veo 3 Fast", badge: "Premium", desc: "El modelo de generación de video más avanzado de Google con calidad inigualable e increíbles detalles.", cost: "720p-1080p | 8s" },
+  { id: "kling-3", name: "Kling 3", badge: "Fama", desc: "Generación de video de primer nivel con fluidez de movimiento inigualable, visuales cinematográficos y precisión de prompt excepcional.", cost: "720p-1080p | 5-10s" },
+  { id: "gemini-omni", name: "Gemini Omni", badge: "Google", desc: "Combina la física avanzada con el conocimiento de ciencia, historia y contexto cultural de Gemini para videos realistas.", cost: "720p-1080p | 4-10s" },
+  { id: "higgsfield_v1", name: "Higgsfield", badge: "Movimiento", desc: "Modelo de IA avanzado con excelente comprensión del movimiento y rendimiento fotorrealista para escenas cinematográficas.", cost: "720p-1080p | 5-15s" },
+  { id: "wan-25", name: "Wan 2.5", badge: "Abierto", desc: "Modelo de IA de código abierto capaz de generar automáticamente videos altamente realistas con audio incorporado.", cost: "720p-1080p | 5-10s" },
+  { id: "grok-imagine-1-5", name: "Grok Imagine 1.5", badge: "xAI", desc: "Modelo de video Grok de xAI, rápido y de alta fidelidad, excelente para prototipado rápido y experimentación creativa.", cost: "720p-1080p | 5-10s" },
+  { id: "seedance-2", name: "Seedance 2 Pro", badge: "Rápido", desc: "Modelo ultrarrápido ideal para experimentación creativa rápida y composición ágil.", cost: "720p-1080p | 5-10s" },
+  { id: "seedance-2-mini", name: "Seedance 2.0 Mini", badge: "Lite", desc: "Modelo ligero construido para la creación rápida y controlable de videos de formato corto con movimiento suave.", cost: "720p-1080p | 5-15s" },
+  { id: "ltxv-2", name: "LTV Video 2", badge: "4K", desc: "Crea videos y audio de alta fidelidad a partir de texto con el nuevo modelo abierto LTXV 2.", cost: "1080p-4K | 6-10s" },
+  { id: "nanobanana-video", name: "Nano Banana", badge: "Divertido", desc: "Modelo liviano para generación rápida de videos creativos. Perfecto para clips cortos.", cost: "480p-720p | 5-10s" },
+  { id: "veo2", name: "Veo 2", badge: "Google", desc: "Desarrollado por Google, ideal para generar videos altamente realistas con simulación física sólida.", cost: "720p-1080p | 10s" },
   { id: "ltxv-13b", name: "LTX-Video 13B", badge: "LTX", desc: "Modelo LTX-Video abierto para control y adaptabilidad en resoluciones optimizadas.", cost: "480p | 1-60s" }
 ];
 
@@ -394,45 +395,7 @@ export default function PromptBuilderPanel({
     }
   }, [activeContextVideoUrl, onClearActiveContextVideoUrl]);
 
-  const resizeAndConvertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const MAX_BOUND = 1024;
-          const MIN_BOUND = 300;
-          if (width > MAX_BOUND || height > MAX_BOUND) {
-            const ratio = Math.min(MAX_BOUND / width, MAX_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          if (width < MIN_BOUND || height < MIN_BOUND) {
-            const ratio = Math.max(MIN_BOUND / width, MIN_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-            resolve(dataUrl);
-          } else {
-            resolve(reader.result as string);
-          }
-        };
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
+  // Removed: resizeAndConvertToBase64 - now using direct Supabase Storage upload
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
@@ -442,25 +405,16 @@ export default function PromptBuilderPanel({
       if (file.type.startsWith("image/")) {
         try {
           setIsUploading(true);
-          const base64 = await resizeAndConvertToBase64(file);
+          // Upload directly to Supabase Storage
+          const imageUrl = await uploadImageToSupabase(file, "video-assets", "reference-images");
           
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: base64 })
-          });
-          if (!res.ok) {
-            throw new Error("Upload failed on server");
-          }
-          const data = await res.json();
-          if (data.url) {
-            if (!refImageUrls.includes(data.url)) {
-              setRefImageUrls([...refImageUrls, data.url]);
-            }
+          // Add to reference images immediately
+          if (!refImageUrls.includes(imageUrl)) {
+            setRefImageUrls([...refImageUrls, imageUrl]);
           }
         } catch (err: any) {
           console.error("Upload error:", err);
-          setUploadError("Fallo al subir la imagen.");
+          setUploadError("Fallo al subir la imagen a Supabase Storage.");
         } finally {
           setIsUploading(false);
         }

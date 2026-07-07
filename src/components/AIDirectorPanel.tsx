@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Brain
 } from "lucide-react";
+import { uploadImageToSupabase } from "../lib/firebase";
 
 export interface ClipBlueprint {
   clipNumber: number;
@@ -112,45 +113,7 @@ export default function AIDirectorPanel({
   } | null>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
 
-  const resizeAndConvertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const MAX_BOUND = 1024;
-          const MIN_BOUND = 300;
-          if (width > MAX_BOUND || height > MAX_BOUND) {
-            const ratio = Math.min(MAX_BOUND / width, MAX_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          if (width < MIN_BOUND || height < MIN_BOUND) {
-            const ratio = Math.max(MIN_BOUND / width, MIN_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-            resolve(dataUrl);
-          } else {
-            resolve(reader.result as string);
-          }
-        };
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
+  // Removed: resizeAndConvertToBase64 - now using direct Supabase Storage upload
 
   const handleChatImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setImageUploadError(null);
@@ -160,18 +123,8 @@ export default function AIDirectorPanel({
       if (file.type.startsWith("image/")) {
         try {
           setIsUploadingImage(true);
-          const base64 = await resizeAndConvertToBase64(file);
-          
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: base64 })
-          });
-          if (!res.ok) {
-            throw new Error("Upload failed on server");
-          }
-          const data = await res.json();
-          const imageUrl = data.url || base64;
+          // Upload directly to Supabase Storage
+          const imageUrl = await uploadImageToSupabase(file, "video-assets", "director-images");
           
           // Add to attached images in chat
           setAttachedImageUrls(prev => [...prev, imageUrl]);
@@ -179,14 +132,14 @@ export default function AIDirectorPanel({
           // Also register as a reference frame asset if prop is available
           if (onAddReferenceFrame) {
             onAddReferenceFrame({
-              name: `Ref Chat ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`,
-              description: `Imagen de referencia subida desde chat del director`,
-              imageUrl: imageUrl
+              name: file.name,
+              description: "Director reference",
+              imageUrl
             });
           }
         } catch (err: any) {
-          console.error("Chat image process error:", err);
-          setImageUploadError("Fallo al procesar o subir la imagen.");
+          console.error("Upload error:", err);
+          setImageUploadError("No se pudo subir la imagen a Supabase Storage.");
         } finally {
           setIsUploadingImage(false);
         }

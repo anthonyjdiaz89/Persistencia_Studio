@@ -18,6 +18,112 @@ import { getAuth, signInAnonymously } from "firebase/auth";
 import { CharacterAsset, PropAsset, LocationAsset, VideoTask, ReferenceFrameAsset } from "../types";
 import { DEFAULT_CHARACTERS, DEFAULT_PROPS, DEFAULT_LOCATIONS } from "../defaultData";
 
+// Supabase Storage Utilities
+let supabaseConfig: { url: string; anonKey: string } | null = null;
+
+export async function getSupabaseConfig() {
+  if (supabaseConfig) return supabaseConfig;
+  
+  const res = await fetch("/api/supabase-config");
+  if (!res.ok) {
+    throw new Error("Failed to load Supabase configuration from server.");
+  }
+  supabaseConfig = await res.json();
+  return supabaseConfig;
+}
+
+/**
+ * Upload image file to Supabase Storage and return public URL
+ * @param file - Image file to upload
+ * @param bucketName - Supabase Storage bucket name (default: 'video-assets')
+ * @param folder - Optional folder path within bucket
+ * @returns Public URL of uploaded image
+ */
+export async function uploadImageToSupabase(
+  file: File,
+  bucketName: string = "video-assets",
+  folder: string = "images"
+): Promise<string> {
+  const config = await getSupabaseConfig();
+  
+  // Resize image before upload to keep storage efficient
+  const resizedBlob = await resizeImage(file, 1024);
+  
+  // Generate unique filename with timestamp
+  const timestamp = Date.now();
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  const extension = file.name.split('.').pop() || 'jpg';
+  const fileName = `${folder}/${timestamp}_${randomStr}.${extension}`;
+  
+  // Upload to Supabase Storage
+  const uploadUrl = `${config.url}/storage/v1/object/${bucketName}/${fileName}`;
+  
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.anonKey}`,
+      'Content-Type': resizedBlob.type,
+    },
+    body: resizedBlob
+  });
+  
+  if (!uploadRes.ok) {
+    const errorText = await uploadRes.text();
+    console.error("Supabase upload error:", errorText);
+    throw new Error(`Failed to upload image to Supabase: ${uploadRes.status} ${errorText}`);
+  }
+  
+  // Return public URL
+  const publicUrl = `${config.url}/storage/v1/object/public/${bucketName}/${fileName}`;
+  return publicUrl;
+}
+
+/**
+ * Resize image file to max width while maintaining aspect ratio
+ */
+function resizeImage(file: File, maxWidth: number = 1024): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      reject(new Error('Could not get canvas context'));
+      return;
+    }
+    
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('Failed to create blob from canvas'));
+          }
+        },
+        file.type,
+        0.85 // Quality
+      );
+    };
+    
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',

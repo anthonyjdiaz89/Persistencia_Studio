@@ -21,6 +21,7 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { getAssetHandle } from "../utils";
+import { uploadImageToSupabase } from "../lib/firebase";
 
 interface AssetLibraryPanelProps {
   characters: CharacterAsset[];
@@ -66,54 +67,7 @@ export default function AssetLibraryPanel({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const resizeAndConvertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-
-          // Target bounding bounds to satisfy Seedance API requirements (Width/Height must be between 300px and 6000px)
-          const MAX_BOUND = 1024;
-          const MIN_BOUND = 300;
-
-          // 1. Scale down if too large
-          if (width > MAX_BOUND || height > MAX_BOUND) {
-            const ratio = Math.min(MAX_BOUND / width, MAX_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-
-          // 2. Scale up if too small (below 300px on either side)
-          if (width < MIN_BOUND || height < MIN_BOUND) {
-            const ratio = Math.max(MIN_BOUND / width, MIN_BOUND / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-            resolve(dataUrl);
-          } else {
-            resolve(reader.result as string);
-          }
-        };
-        img.onerror = () => {
-          reject(new Error("Failed to load image"));
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
+  // Removed: resizeAndConvertToBase64 - now using direct Supabase Storage upload
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -134,24 +88,18 @@ export default function AssetLibraryPanel({
       if (file.type.startsWith("image/")) {
         try {
           setIsUploading(true);
-          const base64 = await resizeAndConvertToBase64(file);
-          setAvatarUrl(base64); // Instant preview
-          
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: base64 })
-          });
-          if (!res.ok) {
-            throw new Error("Upload failed on server");
-          }
-          const data = await res.json();
-          if (data.url) {
-            setAvatarUrl(data.url);
-          }
+          // Upload directly to Supabase Storage
+          const imageUrl = await uploadImageToSupabase(
+            file, 
+            "video-assets", 
+            activeTab === "characters" ? "character-avatars" : 
+            activeTab === "props" ? "prop-images" : 
+            activeTab === "locations" ? "location-images" : "reference-frames"
+          );
+          setAvatarUrl(imageUrl);
         } catch (err: any) {
           console.error("Upload error:", err);
-          setUploadError("No se pudo subir la imagen al servidor.");
+          setUploadError("No se pudo subir la imagen a Supabase Storage.");
         } finally {
           setIsUploading(false);
         }
@@ -169,24 +117,18 @@ export default function AssetLibraryPanel({
       if (file.type.startsWith("image/")) {
         try {
           setIsUploading(true);
-          const base64 = await resizeAndConvertToBase64(file);
-          setAvatarUrl(base64); // Instant preview
-          
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: base64 })
-          });
-          if (!res.ok) {
-            throw new Error("Upload failed on server");
-          }
-          const data = await res.json();
-          if (data.url) {
-            setAvatarUrl(data.url);
-          }
+          // Upload directly to Supabase Storage
+          const imageUrl = await uploadImageToSupabase(
+            file, 
+            "video-assets", 
+            activeTab === "characters" ? "character-avatars" : 
+            activeTab === "props" ? "prop-images" : 
+            activeTab === "locations" ? "location-images" : "reference-frames"
+          );
+          setAvatarUrl(imageUrl);
         } catch (err: any) {
           console.error("Upload error:", err);
-          setUploadError("No se pudo subir la imagen al servidor.");
+          setUploadError("No se pudo subir la imagen a Supabase Storage.");
         } finally {
           setIsUploading(false);
         }

@@ -940,16 +940,23 @@ export default function App() {
     sceneTitle?: string,
     clipNumber?: number
   ) => {
-    console.log("[Generation] Starting video generation:", { model, input, sceneTitle, clipNumber });
     setIsGenerating(true);
     setErrorNotification(null);
 
     try {
       // Add small delay between requests to avoid immediate rate limit hits (request spacing)
       if (tasks.length > 0) {
-        const lastTaskTime = tasks[0]?.created_at || 0;
+        let lastTaskTime = tasks[0]?.created_at || 0;
+        
+        // Fix: Detect if timestamp is in milliseconds (too large) and convert to seconds
+        if (lastTaskTime > 99999999999) {
+          lastTaskTime = Math.floor(lastTaskTime / 1000);
+        }
+        
         const timeSinceLastMs = Date.now() - (lastTaskTime * 1000);
-        if (timeSinceLastMs < 2000) {
+        
+        // Only sleep if the time makes sense (positive and less than 2 seconds)
+        if (timeSinceLastMs >= 0 && timeSinceLastMs < 2000) {
           await sleep(2000 - timeSinceLastMs);
         }
       }
