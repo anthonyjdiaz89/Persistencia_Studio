@@ -496,6 +496,16 @@ export default function App() {
           setHasEnvApiKey(data.hasApiKey);
           setHasGeminiKey(data.hasGeminiKey);
           
+          // Show error notification if API key is missing
+          if (!data.hasApiKey) {
+            setErrorNotification(
+              "⚠️ CONFIGURACIÓN FALTANTE: No se detectó VIDEOGEN_API_KEY en el servidor. " +
+              "El botón de generación está deshabilitado. " +
+              "Configura las variables de entorno en tu plataforma de hosting. " +
+              "Consulta PRODUCCION_ENV.md para instrucciones."
+            );
+          }
+          
           // Check if multi-key load balancing is enabled
           if (data.multiKeyEnabled) {
             setShowMultiKeyMonitor(true);
@@ -504,9 +514,19 @@ export default function App() {
           
           // Note: API keys now managed exclusively via .env (multi-key system)
           // UI input panel disabled - all keys loaded from environment variables
+        } else {
+          console.error("Failed to fetch server config:", res.status);
+          setErrorNotification(
+            "⚠️ ERROR DE SERVIDOR: No se pudo conectar al endpoint /api/config. " +
+            "Verifica que el servidor esté funcionando correctamente."
+          );
         }
       } catch (err) {
         console.error("Failed to check server config", err);
+        setErrorNotification(
+          "⚠️ ERROR DE CONEXIÓN: No se pudo verificar la configuración del servidor. " +
+          "Verifica que la aplicación esté corriendo y que /api/config sea accesible."
+        );
       }
     };
     checkConfig();
@@ -560,9 +580,31 @@ export default function App() {
 
         // Sync video tasks from the proxy API (no longer stored in database)
         await syncHistoryWithApi(uid);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Supabase startup failed:", err);
-        setErrorNotification("Fallo la inicialización de base de datos. Usando datos de respaldo.");
+        
+        // Provide specific error messages
+        let errorMsg = "⚠️ ERROR DE BASE DE DATOS: ";
+        if (err.message?.includes("Supabase configuration")) {
+          errorMsg += "Faltan las variables SUPABASE_URL y SUPABASE_ANON_KEY en el servidor. ";
+          errorMsg += "Los materiales (personajes, props, locaciones) no estarán disponibles. ";
+          errorMsg += "Configura las variables de entorno en tu plataforma de hosting. ";
+          errorMsg += "Consulta PRODUCCION_ENV.md para instrucciones.";
+        } else if (err.message?.includes("Failed to load Supabase configuration")) {
+          errorMsg += "No se pudo cargar la configuración de Supabase desde /api/supabase-config. ";
+          errorMsg += "Verifica que el servidor esté corriendo correctamente.";
+        } else {
+          errorMsg += "No se pudo conectar a la base de datos. ";
+          errorMsg += "Usando datos de respaldo locales. ";
+          errorMsg += "Error: " + (err.message || String(err));
+        }
+        
+        setErrorNotification(errorMsg);
+        
+        // Use default/fallback data
+        setCharacters(DEFAULT_CHARACTERS);
+        setProps(DEFAULT_PROPS);
+        setLocations(DEFAULT_LOCATIONS);
       } finally {
         setIsFirebaseLoading(false);
       }
@@ -2299,7 +2341,6 @@ export default function App() {
             <span className={`w-2 h-2 rounded-full ${anyActivePolling ? "bg-[#d1f025] animate-pulse" : "bg-emerald-500"}`}></span>
             <span>Estado: {anyActivePolling ? "Renderizando (Active Queue Polling)" : "Estudio Listo"}</span>
           </span>
-          <span className="text-[#c8c6c5]">Créditos: 1,420 disp.</span>
           <a className="text-[#71717A] hover:text-white transition-all underline" href="#help">Soporte Técnico</a>
         </div>
       </footer>
