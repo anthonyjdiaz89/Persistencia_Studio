@@ -104,8 +104,11 @@ export async function saveCharacter(userId: string, character: CharacterAsset): 
         user_id: userId,
         name: character.name,
         description: character.description,
-        image_url: character.imageUrl || null,
-        created_at: character.createdAt || new Date().toISOString(),
+        image_url: character.avatarUrl || null,  // Map avatarUrl to image_url
+        gender: character.gender || null,
+        appearance: character.appearance || null,
+        clothing: character.clothing || null,
+        created_at: new Date().toISOString(),
       }, {
         onConflict: 'id',
       });
@@ -132,8 +135,10 @@ export async function getCharacters(userId: string): Promise<CharacterAsset[]> {
       id: row.id,
       name: row.name,
       description: row.description,
-      imageUrl: row.image_url,
-      createdAt: row.created_at,
+      avatarUrl: row.image_url,  // Map image_url to avatarUrl
+      gender: row.gender,
+      appearance: row.appearance,
+      clothing: row.clothing,
     }));
   } catch (error) {
     handleSupabaseError(error, OperationType.LIST, 'characters');
