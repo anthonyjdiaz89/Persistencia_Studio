@@ -298,6 +298,41 @@ export default function App() {
     status: string;
   } | null>(null);
 
+  // Rate Limit & Queue States
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    currentUsage: number;
+    limit: number;
+    resetTime: string;
+    secondsUntilReset: number;
+  } | null>(null);
+  const [requestQueue, setRequestQueue] = useState<Array<{
+    id: string;
+    input: GenerationInput;
+    model: string;
+    sceneTitle?: string;
+    clipNumber?: number;
+    retryCount: number;
+  }>>([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+
+  // Multi-Key Load Balancing States
+  const [multiKeyStatus, setMultiKeyStatus] = useState<{
+    totalKeys: number;
+    availableKeys: number;
+    loadBalancingActive: boolean;
+    keys: Array<{
+      index: number;
+      alias: string;
+      keyPreview: string;
+      isAvailable: boolean;
+      currentUsage: number;
+      limit: number;
+      resetInSeconds: number;
+      resetTime: string | null;
+    }>;
+  } | null>(null);
+  const [showMultiKeyMonitor, setShowMultiKeyMonitor] = useState(false);
+
   // 2. Camera Settings State
   const [cameraSettings, setCameraSettings] = useState<CameraSettings>({
     pan: "none",
@@ -494,6 +529,12 @@ export default function App() {
           setHasEnvApiKey(data.hasApiKey);
           setHasGeminiKey(data.hasGeminiKey);
           
+          // Check if multi-key load balancing is enabled
+          if (data.multiKeyEnabled) {
+            setShowMultiKeyMonitor(true);
+            fetchMultiKeyStatus();
+          }
+          
           // Auto-open API Key input panel if no credentials found
           if (!data.hasApiKey && !apiKey) {
             setShowApiKeyPanel(true);
@@ -505,6 +546,32 @@ export default function App() {
     };
     checkConfig();
   }, []);
+
+  // Fetch multi-key status
+  const fetchMultiKeyStatus = async () => {
+    try {
+      const res = await fetch("/api/keys/status");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setMultiKeyStatus(data);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch multi-key status", err);
+    }
+  };
+
+  // Poll multi-key status every 10 seconds if load balancing is active
+  useEffect(() => {
+    if (!showMultiKeyMonitor) return;
+    
+    const interval = setInterval(() => {
+      fetchMultiKeyStatus();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [showMultiKeyMonitor]);
 
   // Initialize Firebase and load user specific data
   useEffect(() => {
@@ -746,7 +813,96 @@ export default function App() {
     }
   };
 
-  // 11. Core Generation Request
+  // 11. Core Generation Request with Rate Limit Handling
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const executeGenerationWithRetry = async (
+    input: GenerationInput,
+    model: string,
+    sceneTitle?: string,
+    clipNumber?: number,
+    retryCount: number = 0
+  ): Promise<boolean> => {
+    const maxRetries = 3;
+    try {
+      const res = await fetch("/api/seedance/generations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ model, input })
+      });
+
+      const data = await res.json();
+
+      // Update rate limit info from response if present
+      if (data.rate_limit) {
+        setRateLimitInfo({
+          currentUsage: data.rate_limit.current_usage || 0,
+          limit: data.rate_limit.limit || 5,
+          resetTime: data.rate_limit.reset_time || "",
+          secondsUntilReset: data.rate_limit.seconds_until_reset || 0
+        });
+      }
+
+      if (res.status === 429 && retryCount < maxRetries) {
+        const waitSeconds = data.details?.seconds_until_reset || (2 ** retryCount) * 5;
+        const waitMs = Math.min(waitSeconds * 1000, 600000); // Cap at 10 minutes
+        console.log(`[Rate Limit] Retry ${retryCount + 1}/${maxRetries} after ${Math.ceil(waitMs / 1000)}s`);
+        setErrorNotification(`Rate limit alcanzado. Reintentando automáticamente en ${Math.ceil(waitMs / 1000)}s...`);
+        await sleep(waitMs);
+        return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
+      }
+
+      if (!res.ok) {
+        const errorMsg = extractApiErrorMessage(data, `Request failed with status ${res.status}`);
+        if (res.status === 401 || errorMsg.toLowerCase().includes("api key") || errorMsg.toLowerCase().includes("unauthorized") || errorMsg.toLowerCase().includes("invalid")) {
+          setErrorNotification("Clave de API no válida o desautorizada. Por favor, verifica tu clave en el panel de configuración.");
+          return false;
+        }
+        setErrorNotification(errorMsg);
+        return false;
+      }
+
+      if (data.success && data.taskId) {
+        const newTask: VideoTask = {
+          id: data.taskId,
+          status: "queued",
+          created_at: Math.floor(Date.now() / 1000),
+          model,
+          credits: data.credits || 60,
+          failed_reason: null,
+          input,
+          sceneTitle,
+          clipNumber,
+          data: null
+        };
+        setTasks(prev => [newTask, ...prev]);
+        if (userId) {
+          try {
+            await saveTaskDoc(userId, newTask);
+          } catch (e) {
+            console.error("Error saving new task to Firestore:", e);
+          }
+        }
+        startPollingTask(data.taskId, userId);
+        return true;
+      }
+
+      setErrorNotification("Respuesta inesperada del servidor.");
+      return false;
+    } catch (err: any) {
+      if (retryCount < maxRetries) {
+        const waitMs = (2 ** retryCount) * 2000;
+        console.log(`[Network Error] Retry ${retryCount + 1}/${maxRetries} after ${Math.ceil(waitMs / 1000)}s`);
+        await sleep(waitMs);
+        return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
+      }
+      setErrorNotification(err.message || "A network error occurred. Please try again.");
+      return false;
+    }
+  };
+
   const handleGenerateVideo = async (
     input: GenerationInput, 
     model: string,
@@ -756,79 +912,28 @@ export default function App() {
     setIsGenerating(true);
     setErrorNotification(null);
 
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      const activeKey = apiKey || "";
-      if (activeKey) {
-        headers["Authorization"] = `Bearer ${activeKey}`;
+    // Add small delay between requests to avoid immediate rate limit hits (request spacing)
+    if (tasks.length > 0) {
+      const lastTaskTime = tasks[0]?.created_at || 0;
+      const timeSinceLastMs = Date.now() - (lastTaskTime * 1000);
+      if (timeSinceLastMs < 2000) {
+        await sleep(2000 - timeSinceLastMs);
       }
-
-      console.log("[App] Dispatching generation request with payload:", input);
-
-      const res = await fetch("/api/seedance/generations", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model,
-          input
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const errorMsg = extractApiErrorMessage(
-          data,
-          "Failed to create Seedance task. Check your API key or resolution limits."
-        );
-
-        // Auto-open API Key panel if authentication/key error is encountered
-        if (res.status === 401 || errorMsg.toLowerCase().includes("api key") || errorMsg.toLowerCase().includes("unauthorized") || errorMsg.toLowerCase().includes("invalid")) {
-          setShowApiKeyPanel(true);
-        }
-
-        setErrorNotification(errorMsg);
-        setIsGenerating(false);
-        return;
-      }
-
-      const taskId = data.taskId;
-      const credits = data.credits || 60;
-
-      const newTask: VideoTask = {
-        id: taskId,
-        status: "queued",
-        created_at: Math.floor(Date.now() / 1000),
-        model,
-        credits,
-        failed_reason: null,
-        input,
-        sceneTitle,
-        clipNumber,
-        data: null
-      };
-
-      setTasks(prev => [newTask, ...prev]);
-      setSelectedTaskId(taskId);
-      setActiveTab("studio");
-      if (userId) {
-        try {
-          await saveTaskDoc(userId, newTask);
-        } catch (e) {
-          console.error("Error saving new task to Firestore:", e);
-        }
-      }
-      startPollingTask(taskId, userId);
-
-      setSuccessToast("New video generation queued successfully! Watch render progress below.");
-      setTimeout(() => setSuccessToast(null), 5000);
-
-    } catch (err: any) {
-      console.error("[App] Generation error:", err);
-      setErrorNotification(err.message || "A network error occurred. Please try again.");
-    } finally {
-      setIsGenerating(false);
     }
+
+    const success = await executeGenerationWithRetry(input, model, sceneTitle, clipNumber, 0);
+    setIsGenerating(false);
+
+    if (!success) {
+      console.log("[Generation] Failed after retries");
+      return;
+    }
+
+    // On success, update UI state
+    setSelectedTaskId(tasks[0]?.id || "");
+    setActiveTab("studio");
+    setSuccessToast("New video generation queued successfully! Watch render progress below.");
+    setTimeout(() => setSuccessToast(null), 5000);
   };
 
   // 12. Replay/Reload configuration back into prompt workspace
@@ -1507,6 +1612,67 @@ export default function App() {
                     <p className="text-xs font-bold">{successToast}</p>
                   </div>
                   <button onClick={() => setSuccessToast(null)} className="text-white hover:text-[#d1f025] font-black text-xs px-2">✕</button>
+                </div>
+              )}
+
+              {/* Rate Limit Info Banner */}
+              {rateLimitInfo && rateLimitInfo.currentUsage > 0 && (
+                <div className="mx-4 mt-4 bg-blue-500/10 border border-blue-500/20 text-blue-300 rounded-xl p-3 flex items-center justify-between animate-fade-in z-20">
+                  <div className="flex gap-3 items-center flex-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-mono">📊</span>
+                      <span className="font-bold">Rate Limit:</span>
+                      <span className="font-mono">{rateLimitInfo.currentUsage}/{rateLimitInfo.limit}</span>
+                    </div>
+                    {rateLimitInfo.secondsUntilReset > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-mono">⏱️</span>
+                        <span>Reinicia en {Math.ceil(rateLimitInfo.secondsUntilReset / 60)} min</span>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => setRateLimitInfo(null)} className="text-blue-300 hover:text-white font-black text-xs px-2">✕</button>
+                </div>
+              )}
+
+              {/* Multi-Key Load Balancing Monitor */}
+              {showMultiKeyMonitor && multiKeyStatus && multiKeyStatus.loadBalancingActive && (
+                <div className="mx-4 mt-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-xl p-3 animate-fade-in z-20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-xs font-bold">
+                      <span className="font-mono">🔄</span>
+                      <span>Balanceo de Carga Activo</span>
+                      <span className="text-emerald-400">{multiKeyStatus.availableKeys}/{multiKeyStatus.totalKeys} Keys Disponibles</span>
+                    </div>
+                    <button onClick={() => setShowMultiKeyMonitor(false)} className="text-emerald-300 hover:text-white font-black text-xs px-2">✕</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {multiKeyStatus.keys.map((key) => (
+                      <div 
+                        key={key.index} 
+                        className={`p-2 rounded-lg border text-xs ${
+                          key.isAvailable 
+                            ? 'bg-emerald-500/5 border-emerald-500/30' 
+                            : 'bg-rose-500/5 border-rose-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold font-mono">{key.alias}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                            key.isAvailable ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                          }`}>
+                            {key.isAvailable ? 'ACTIVA' : 'LÍMITE'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                          <span>{key.currentUsage}/{key.limit} requests</span>
+                          {key.resetInSeconds > 0 && (
+                            <span>⏱️ {Math.ceil(key.resetInSeconds / 60)}min</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

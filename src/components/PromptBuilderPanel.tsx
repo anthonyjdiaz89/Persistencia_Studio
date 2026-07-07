@@ -670,10 +670,16 @@ export default function PromptBuilderPanel({
     }
 
     const activeVideoUrl = selectedVideoUrl || manualVideoUrl;
+    const shouldForceTextOnlyForSeedance25 = model === "seedance-25" && duration > 10;
+    const effectiveGenType = shouldForceTextOnlyForSeedance25
+      ? "text-to-video"
+      : (activeVideoUrl ? "reference-to-video" : finalGenType);
+    const effectiveImageUrls = shouldForceTextOnlyForSeedance25 ? [] : combinedRefImages.slice(0, 9);
+    const effectiveVideoUrls = shouldForceTextOnlyForSeedance25 || !activeVideoUrl ? [] : [activeVideoUrl];
 
     const inputPayload: GenerationInput = {
       prompt: compiledPrompt,
-      generation_type: activeVideoUrl ? "reference-to-video" : finalGenType,
+      generation_type: effectiveGenType,
       duration,
       aspect_ratio: aspectRatio,
       resolution,
@@ -682,8 +688,8 @@ export default function PromptBuilderPanel({
       web_search: webSearch,
       return_last_frame: returnLastFrame,
       seed,
-      ...(combinedRefImages.length > 0 ? { image_urls: combinedRefImages.slice(0, 9) } : {}),
-      ...(activeVideoUrl ? { video_urls: [activeVideoUrl] } : {})
+      ...(effectiveImageUrls.length > 0 ? { image_urls: effectiveImageUrls } : {}),
+      ...(effectiveVideoUrls.length > 0 ? { video_urls: effectiveVideoUrls } : {})
     };
 
     onGenerate(inputPayload, model);

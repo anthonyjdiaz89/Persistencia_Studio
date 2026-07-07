@@ -380,7 +380,37 @@ async function startServer() {
     res.json({ 
       status: "ok", 
       hasApiKey: !!(process.env.VIDEOGEN_API_KEY || process.env.SEEDANCE_API_KEY),
-      hasGeminiKey: !!process.env.GEMINI_API_KEY
+      hasGeminiKey: !!process.env.GEMINI_API_KEY,
+      multiKeyEnabled: apiKeys.length > 1
+    });
+  });
+
+  // API Route: Multi-Key Status Monitor
+  app.get("/api/keys/status", (req, res) => {
+    const now = Date.now();
+    const keysStatus = apiKeys.map((keyInfo, idx) => ({
+      index: idx + 1,
+      alias: keyInfo.alias,
+      keyPreview: `${keyInfo.key.substring(0, 15)}...${keyInfo.key.substring(keyInfo.key.length - 4)}`,
+      isAvailable: keyInfo.isAvailable || now >= keyInfo.rateLimitResetTime,
+      currentUsage: keyInfo.currentUsage,
+      limit: keyInfo.limit,
+      resetInSeconds: keyInfo.rateLimitResetTime > now 
+        ? Math.ceil((keyInfo.rateLimitResetTime - now) / 1000) 
+        : 0,
+      resetTime: keyInfo.rateLimitResetTime > 0 
+        ? new Date(keyInfo.rateLimitResetTime).toISOString() 
+        : null
+    }));
+    
+    const availableCount = keysStatus.filter(k => k.isAvailable).length;
+    
+    res.json({
+      success: true,
+      totalKeys: apiKeys.length,
+      availableKeys: availableCount,
+      keys: keysStatus,
+      loadBalancingActive: apiKeys.length > 1
     });
   });
 
@@ -734,13 +764,133 @@ JSON Schema:
     }
   });
 
-  // Helper to resolve the Seedance/VideoGenAPI API Key (from request headers or server environment)
+  // ============================================================================
+  // Multi-API-Key Load Balancing System
+  // ============================================================================
+  interface ApiKeyInfo {
+    key: string;
+    alias: string;
+    rateLimitResetTime: number; // timestamp when rate limit resets
+    isAvailable: boolean;
+    currentUsage: number;
+    limit: number;
+  }
+
+  const apiKeys: ApiKeyInfo[] = [];
+  
+  // Load all API keys from environment (VIDEOGEN_API_KEY_1, VIDEOGEN_API_KEY_2, etc.)
+  const loadApiKeys = () => {
+    const keys: ApiKeyInfo[] = [];
+    
+    // Try loading VIDEOGEN_API_KEY_1, VIDEOGEN_API_KEY_2, VIDEOGEN_API_KEY_3
+    for (let i = 1; i <= 10; i++) {
+      const key = process.env[`VIDEOGEN_API_KEY_${i}`];
+      if (key && key.trim()) {
+        keys.push({
+          key: key.trim(),
+          alias: `Key ${i}`,
+          rateLimitResetTime: 0,
+          isAvailable: true,
+          currentUsage: 0,
+          limit: 5
+        });
+      }
+    }
+    
+    // Fallback to single key if no numbered keys found
+    if (keys.length === 0) {
+      const singleKey = process.env.VIDEOGEN_API_KEY || process.env.SEEDANCE_API_KEY;
+      if (singleKey && singleKey.trim()) {
+        keys.push({
+          key: singleKey.trim(),
+          alias: "Primary Key",
+          rateLimitResetTime: 0,
+          isAvailable: true,
+          currentUsage: 0,
+          limit: 5
+        });
+      }
+    }
+    
+    return keys;
+  };
+
+  // Initialize API keys on server start
+  apiKeys.push(...loadApiKeys());
+  console.log(`[Multi-Key System] Loaded ${apiKeys.length} API key(s) for load balancing`);
+  apiKeys.forEach((keyInfo, idx) => {
+    console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}...`);
+  });
+
+  // Select best available API key (round-robin with availability check)
+  let lastUsedKeyIndex = -1;
+  const selectBestAvailableApiKey = (): ApiKeyInfo | null => {
+    if (apiKeys.length === 0) return null;
+    
+    const now = Date.now();
+    
+    // Reset availability for keys whose rate limit window has passed
+    apiKeys.forEach(keyInfo => {
+      if (!keyInfo.isAvailable && now >= keyInfo.rateLimitResetTime) {
+        keyInfo.isAvailable = true;
+        keyInfo.currentUsage = 0;
+        console.log(`[Multi-Key System] ${keyInfo.alias} rate limit reset - now available`);
+      }
+    });
+    
+    // Find next available key (round-robin)
+    for (let i = 0; i < apiKeys.length; i++) {
+      lastUsedKeyIndex = (lastUsedKeyIndex + 1) % apiKeys.length;
+      const candidate = apiKeys[lastUsedKeyIndex];
+      if (candidate.isAvailable) {
+        console.log(`[Multi-Key System] Selected ${candidate.alias} (${candidate.currentUsage}/${candidate.limit} used)`);
+        return candidate;
+      }
+    }
+    
+    // All keys are rate-limited - find the one that resets soonest
+    const soonestReset = apiKeys.reduce((earliest, current) => 
+      current.rateLimitResetTime < earliest.rateLimitResetTime ? current : earliest
+    );
+    
+    const waitSeconds = Math.ceil((soonestReset.rateLimitResetTime - now) / 1000);
+    console.log(`[Multi-Key System] All keys rate-limited. Soonest reset: ${soonestReset.alias} in ${waitSeconds}s`);
+    return null;
+  };
+
+  // Mark a key as rate-limited
+  const markKeyAsRateLimited = (keyString: string, resetInSeconds: number) => {
+    const keyInfo = apiKeys.find(k => k.key === keyString);
+    if (keyInfo) {
+      keyInfo.isAvailable = false;
+      keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
+      keyInfo.currentUsage = keyInfo.limit;
+      console.log(`[Multi-Key System] ${keyInfo.alias} marked as rate-limited for ${resetInSeconds}s`);
+    }
+  };
+
+  // Update key usage count from API response
+  const updateKeyUsage = (keyString: string, usage: number, limit: number = 5) => {
+    const keyInfo = apiKeys.find(k => k.key === keyString);
+    if (keyInfo) {
+      keyInfo.currentUsage = usage;
+      keyInfo.limit = limit;
+      if (usage >= limit) {
+        keyInfo.isAvailable = false;
+      }
+    }
+  };
+
+  // Helper to resolve the Seedance/VideoGenAPI API Key (from request headers or load balancer)
   const getApiKey = (req: express.Request): string | null => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 7) {
       return authHeader.substring(7);
     }
-    return process.env.VIDEOGEN_API_KEY || process.env.SEEDANCE_API_KEY || null;
+    
+    // Use load balancing system
+    const selectedKey = selectBestAvailableApiKey();
+    return selectedKey ? selectedKey.key : null;
   };
 
   // In-memory sliding-window rate limiter for /api/seedance/generations.
@@ -1033,6 +1183,9 @@ JSON Schema:
 
       const parsedDuration = Number(sanitizedInput.duration);
       const requestedDuration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? Math.round(parsedDuration) : 5;
+      const requestedGenerationType = typeof sanitizedInput.generation_type === "string"
+        ? sanitizedInput.generation_type
+        : "text-to-video";
       const normalizeAspectRatio = (ratio: any): string => {
         const value = typeof ratio === "string" ? ratio.trim() : "";
         if (value === "16:9" || value === "4:3" || value === "1:1" || value === "9:21") {
@@ -1043,9 +1196,19 @@ JSON Schema:
         return "16:9";
       };
       const normalizedAspectRatio = normalizeAspectRatio(sanitizedInput.aspect_ratio);
-      const hasReferenceInputs =
-        (Array.isArray(sanitizedInput.image_urls) && sanitizedInput.image_urls.length > 0) ||
-        (Array.isArray(sanitizedInput.video_urls) && sanitizedInput.video_urls.length > 0);
+      const enforceTextOnlyForSeedance25 =
+        normalizedModel === "seedance-25" &&
+        requestedDuration > 10 &&
+        requestedGenerationType === "text-to-video";
+
+      const effectiveImageUrls = enforceTextOnlyForSeedance25
+        ? []
+        : (Array.isArray(sanitizedInput.image_urls) ? sanitizedInput.image_urls : []);
+      const effectiveVideoUrls = enforceTextOnlyForSeedance25
+        ? []
+        : (Array.isArray(sanitizedInput.video_urls) ? sanitizedInput.video_urls : []);
+
+      const hasReferenceInputs = effectiveImageUrls.length > 0 || effectiveVideoUrls.length > 0;
       const durationRules: Record<string, { min: number; max: number }> = {
         "sora-2": { min: 10, max: 10 },
         "higgsfield_v1": { min: 5, max: 15 },
@@ -1103,17 +1266,17 @@ JSON Schema:
         ...(finalCallbackUrl ? { callback_url: finalCallbackUrl } : {})
       };
 
-      if (sanitizedInput.image_urls && sanitizedInput.image_urls.length > 0) {
+      if (effectiveImageUrls.length > 0) {
         // Use documented fields only: single image -> image_url, multi-image -> reference_image_urls.
-        if (sanitizedInput.image_urls.length === 1) {
-          payload.image_url = sanitizedInput.image_urls[0];
+        if (effectiveImageUrls.length === 1) {
+          payload.image_url = effectiveImageUrls[0];
         } else {
-          payload.reference_image_urls = sanitizedInput.image_urls.slice(0, 5);
+          payload.reference_image_urls = effectiveImageUrls.slice(0, 5);
         }
       }
-      if (sanitizedInput.video_urls && sanitizedInput.video_urls.length > 0) {
+      if (effectiveVideoUrls.length > 0) {
         // Keep best-effort single documented-style video URL key to reduce schema validation noise.
-        payload.video_url = sanitizedInput.video_urls[0];
+        payload.video_url = effectiveVideoUrls[0];
       }
 
       // Veo 3.1 multi-image mode expects 16:9 in provider docs.
@@ -1134,8 +1297,28 @@ JSON Schema:
 
       const responseData = await response.json();
 
+      // Update key usage from API response (if rate_limit info is present)
+      if (responseData.rate_limit) {
+        const usage = responseData.rate_limit.current_usage || 0;
+        const limit = responseData.rate_limit.limit || 5;
+        const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 600;
+        updateKeyUsage(apiKey, usage, limit);
+        
+        // If we're at the limit, mark key as rate-limited
+        if (usage >= limit) {
+          markKeyAsRateLimited(apiKey, secondsUntilReset);
+        }
+      }
+
       if (!response.ok) {
         console.warn("[VideoGenAPI Proxy] Generation request rejected:", JSON.stringify(responseData));
+        
+        // Handle 429 rate limit errors - mark key as unavailable
+        if (response.status === 429 && responseData.details) {
+          const resetSeconds = responseData.details.seconds_until_reset || 600;
+          markKeyAsRateLimited(apiKey, resetSeconds);
+        }
+        
         return res.status(response.status).json(normalizeProviderError(responseData, response.status));
       }
 

@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Test files
+test-*.json
+tmp-*.json
+tmp.json
