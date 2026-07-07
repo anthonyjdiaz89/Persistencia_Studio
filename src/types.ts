@@ -42,6 +42,7 @@ export type CameraZoom = "none" | "in" | "out";
 export type CameraRoll = "none" | "clockwise" | "counter_clockwise";
 export type CameraSpeed = "normal" | "slow" | "fast";
 export type CameraStyle = 
+  | "auto"
   | "static" 
   | "drone" 
   | "handheld" 
@@ -51,6 +52,9 @@ export type CameraStyle =
   | "fpv" 
   | "panoramic";
 
+export type TimeOfDay = "dawn" | "day" | "afternoon" | "sunset" | "night";
+export type MotionCurve = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
 export interface CameraSettings {
   pan: CameraPan;
   tilt: CameraTilt;
@@ -58,6 +62,8 @@ export interface CameraSettings {
   roll: CameraRoll;
   speed: CameraSpeed;
   style: CameraStyle;
+  timeOfDay: TimeOfDay;
+  motionCurve: MotionCurve;
 }
 
 export type GenerationMode = "text-to-video" | "image-to-video" | "reference-to-video";

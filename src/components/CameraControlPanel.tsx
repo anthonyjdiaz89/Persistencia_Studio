@@ -11,7 +11,9 @@ import {
   CameraZoom, 
   CameraRoll, 
   CameraSpeed, 
-  CameraStyle 
+  CameraStyle,
+  TimeOfDay,
+  MotionCurve
 } from "../types";
 import { 
   Video, 
@@ -28,7 +30,13 @@ import {
   Gauge,
   Compass,
   Sparkles,
-  HelpCircle
+  Sunrise,
+  Sun,
+  Sunset,
+  Moon,
+  Cloud,
+  Waves,
+  TrendingUp
 } from "lucide-react";
 import { compileCameraPrompt } from "../utils";
 
@@ -45,15 +53,31 @@ export default function CameraControlPanel({ settings, onChange }: CameraControl
     });
   };
 
+  const timeOfDayOptions: { value: TimeOfDay; label: string; desc: string; icon: React.ReactNode }[] = [
+    { value: "dawn", label: "Amanecer", desc: "Luz suave rosa y naranja", icon: <Sunrise className="w-4 h-4 text-pink-400" /> },
+    { value: "day", label: "Día", desc: "Luz brillante natural", icon: <Sun className="w-4 h-4 text-yellow-400" /> },
+    { value: "afternoon", label: "Tarde", desc: "Luz cálida dorada", icon: <Cloud className="w-4 h-4 text-orange-300" /> },
+    { value: "sunset", label: "Atardecer", desc: "Cielo naranja y púrpura", icon: <Sunset className="w-4 h-4 text-orange-500" /> },
+    { value: "night", label: "Noche", desc: "Atmósfera nocturna", icon: <Moon className="w-4 h-4 text-blue-300" /> },
+  ];
+
   const cameraStyles: { value: CameraStyle; label: string; desc: string; icon: React.ReactNode }[] = [
-    { value: "static", label: "Static Shot", desc: "Locked-down tripod", icon: <Tv className="w-4 h-4" /> },
-    { value: "drone", label: "Drone Flyover", desc: "Aerial cinema perspective", icon: <Compass className="w-4 h-4 text-sky-400" /> },
-    { value: "handheld", label: "Handheld", desc: "Documentary shake and realism", icon: <Video className="w-4 h-4 text-emerald-400" /> },
-    { value: "dolly", label: "Dolly Zoom", desc: "Smooth track-in with perspective", icon: <ArrowUp className="w-4 h-4 text-purple-400" /> },
-    { value: "crane", label: "Crane Shot", desc: "Vertical sweeping high-angle", icon: <ArrowDown className="w-4 h-4 text-amber-400" /> },
-    { value: "orbit", label: "Orbit 360°", desc: "Steady orbital wrap-around", icon: <Compass className="w-4 h-4 text-rose-400" /> },
-    { value: "fpv", label: "FPV Racing", desc: "Fast dynamic acrobatic weave", icon: <Zap className="w-4 h-4 text-yellow-400" /> },
-    { value: "panoramic", label: "Panoramic", desc: "Ultra-wide scenic landscape sweep", icon: <Sparkles className="w-4 h-4 text-indigo-400" /> },
+    { value: "auto", label: "Auto", desc: "Del prompt del usuario", icon: <Sparkles className="w-4 h-4 text-purple-400" /> },
+    { value: "static", label: "Static", desc: "Plano fijo", icon: <Tv className="w-4 h-4" /> },
+    { value: "drone", label: "Drone", desc: "Perspectiva aérea", icon: <Compass className="w-4 h-4 text-sky-400" /> },
+    { value: "handheld", label: "Handheld", desc: "Cámara en mano", icon: <Video className="w-4 h-4 text-emerald-400" /> },
+    { value: "dolly", label: "Dolly", desc: "Travelling suave", icon: <ArrowUp className="w-4 h-4 text-purple-400" /> },
+    { value: "crane", label: "Crane", desc: "Grúa vertical", icon: <ArrowDown className="w-4 h-4 text-amber-400" /> },
+    { value: "orbit", label: "Orbit", desc: "Giro orbital 360°", icon: <Compass className="w-4 h-4 text-rose-400" /> },
+    { value: "fpv", label: "FPV", desc: "Drone acrobático", icon: <Zap className="w-4 h-4 text-yellow-400" /> },
+    { value: "panoramic", label: "Panoramic", desc: "Barrido panorámico", icon: <Waves className="w-4 h-4 text-indigo-400" /> },
+  ];
+
+  const motionCurveOptions: { value: MotionCurve; label: string; desc: string }[] = [
+    { value: "linear", label: "Lineal", desc: "Velocidad constante" },
+    { value: "ease-in", label: "Ease In", desc: "Inicia lento, acelera" },
+    { value: "ease-out", label: "Ease Out", desc: "Inicia rápido, desacelera" },
+    { value: "ease-in-out", label: "Ease In-Out", desc: "Lento → Rápido → Lento" },
   ];
 
   const compiledText = compileCameraPrompt(settings);
@@ -200,33 +224,98 @@ export default function CameraControlPanel({ settings, onChange }: CameraControl
         </div>
       </div>
 
-      {/* Cinematic Camera Style Selector */}
+      {/* Time of Day - Horario (Animated Series Look) */}
+      <div className="space-y-2 border-t border-dark-border pt-4">
+        <label className="text-[10px] font-medium text-slate-300 flex items-center justify-between uppercase tracking-wider">
+          <span className="flex items-center gap-2">
+            <Sunrise className="w-4 h-4 text-orange-400" />
+            Horario del Día
+          </span>
+          <span className="text-[9px] text-[#71717A] normal-case">look de la serie</span>
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {timeOfDayOptions.map((tod) => (
+            <button
+              key={tod.value}
+              id={`time-${tod.value}`}
+              type="button"
+              onClick={() => updateSetting("timeOfDay", tod.value)}
+              className={`flex flex-col items-center justify-center p-2.5 rounded border text-center transition-all ${
+                settings.timeOfDay === tod.value
+                  ? "bg-[#27272A]/80 border-orange-500 text-white ring-1 ring-orange-500/30"
+                  : "bg-dark-input/50 border-dark-border text-[#71717A] hover:bg-[#27272A]/40 hover:text-slate-200"
+              }`}
+            >
+              <div className="mb-1.5">{tod.icon}</div>
+              <span className={`text-xs font-medium mb-0.5 ${settings.timeOfDay === tod.value ? "text-slate-200" : "text-slate-300"}`}>
+                {tod.label}
+              </span>
+              <span className="text-[9px] text-slate-400 leading-tight">
+                {tod.desc}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Camera Movement Style */}
       <div className="space-y-2">
         <label className="text-[10px] font-medium text-slate-300 flex items-center justify-between uppercase tracking-wider">
-          <span>Lens & Shooting Style Presets</span>
-          <span className="text-[9px] text-[#71717A] normal-case">composition style</span>
+          <span>Movimiento de Cámara</span>
+          <span className="text-[9px] text-[#71717A] normal-case">opcional</span>
         </label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {cameraStyles.map((cs) => (
             <button
               key={cs.value}
               id={`style-${cs.value}`}
               type="button"
               onClick={() => updateSetting("style", cs.value)}
-              className={`flex flex-col items-start p-2.5 rounded border text-left transition-all ${
+              className={`flex flex-col items-center justify-center p-2 rounded border text-center transition-all ${
                 settings.style === cs.value
                   ? "bg-[#27272A]/80 border-orange-500 text-white ring-1 ring-orange-500/30"
                   : "bg-dark-input/50 border-dark-border text-[#71717A] hover:bg-[#27272A]/40 hover:text-slate-200"
               }`}
             >
-              <div className="flex items-center space-x-1.5 mb-1 font-medium text-xs">
-                {cs.icon}
-                <span className={settings.style === cs.value ? "text-slate-200" : "text-slate-300"}>
-                  {cs.label}
-                </span>
-              </div>
-              <span className="text-[10px] text-slate-400 leading-tight">
+              <div className="mb-1">{cs.icon}</div>
+              <span className={`text-[10px] font-medium ${settings.style === cs.value ? "text-slate-200" : "text-slate-300"}`}>
+                {cs.label}
+              </span>
+              <span className="text-[8px] text-slate-400 leading-tight">
                 {cs.desc}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Motion Curve - Curva de Movimiento */}
+      <div className="space-y-2">
+        <label className="text-[10px] font-medium text-slate-300 flex items-center justify-between uppercase tracking-wider">
+          <span className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-orange-400" />
+            Curva de Movimiento
+          </span>
+          <span className="text-[9px] text-[#71717A] normal-case">ritmo del movimiento</span>
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {motionCurveOptions.map((mc) => (
+            <button
+              key={mc.value}
+              id={`curve-${mc.value}`}
+              type="button"
+              onClick={() => updateSetting("motionCurve", mc.value)}
+              className={`flex flex-col items-start p-2.5 rounded border text-left transition-all ${
+                settings.motionCurve === mc.value
+                  ? "bg-[#27272A]/80 border-orange-500 text-white ring-1 ring-orange-500/30"
+                  : "bg-dark-input/50 border-dark-border text-[#71717A] hover:bg-[#27272A]/40 hover:text-slate-200"
+              }`}
+            >
+              <span className={`text-xs font-medium mb-0.5 ${settings.motionCurve === mc.value ? "text-slate-200" : "text-slate-300"}`}>
+                {mc.label}
+              </span>
+              <span className="text-[10px] text-slate-400 leading-tight">
+                {mc.desc}
               </span>
             </button>
           ))}

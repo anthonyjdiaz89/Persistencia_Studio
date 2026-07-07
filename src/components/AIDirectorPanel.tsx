@@ -43,6 +43,8 @@ export interface ClipBlueprint {
     roll: string;
     speed: string;
     style: string;
+    timeOfDay: string;
+    motionCurve: string;
   };
   duration: number;
   generate_audio: boolean;
@@ -692,7 +694,13 @@ export default function AIDirectorPanel({
                               {/* Camera Movement Badge Summary */}
                               <div className="flex flex-wrap gap-1">
                                 <span className="text-[8px] font-mono bg-[#1F1F23] border border-[#3F3F46] px-1 rounded text-[#71717A]">
+                                  Horario: {clip.cameraSettings.timeOfDay}
+                                </span>
+                                <span className="text-[8px] font-mono bg-[#1F1F23] border border-[#3F3F46] px-1 rounded text-[#71717A]">
                                   Style: {clip.cameraSettings.style}
+                                </span>
+                                <span className="text-[8px] font-mono bg-[#1F1F23] border border-[#3F3F46] px-1 rounded text-[#71717A]">
+                                  Curve: {clip.cameraSettings.motionCurve}
                                 </span>
                                 {clip.cameraSettings.pan !== "none" && (
                                   <span className="text-[8px] font-mono bg-orange-500/10 border border-orange-500/20 px-1 rounded text-orange-400">

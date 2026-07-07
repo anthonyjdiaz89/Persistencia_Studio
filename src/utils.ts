@@ -36,38 +36,77 @@ function normalizeForMatching(text: string): string {
 export function compileCameraPrompt(settings: CameraSettings): string {
   const parts: string[] = [];
 
-  // 1. Camera Style / Lens descriptor
-  let styleDesc = "";
-  switch (settings.style) {
-    case "static":
-      styleDesc = "static studio shot, locked tripod lock-on";
+  // 1. Time of Day - Always applied (Animated Series Look)
+  let timeOfDayPrompt = "";
+  switch (settings.timeOfDay) {
+    case "dawn":
+      timeOfDayPrompt = "soft early morning light, pink and orange sky glow, gentle sunrise atmosphere, mist and dew, peaceful dawn ambiance";
       break;
-    case "drone":
-      styleDesc = "cinematic drone shot, aerial flyover perspective";
+    case "day":
+      timeOfDayPrompt = "bright daylight, clear blue sky, vibrant colors, strong natural lighting, high sun visibility";
       break;
-    case "handheld":
-      styleDesc = "raw handheld shaky cam style, documentary look";
+    case "afternoon":
+      timeOfDayPrompt = "warm afternoon sunlight, golden hour beginning, soft shadows lengthening, comfortable warm tones";
       break;
-    case "dolly":
-      styleDesc = "dolly zoom vertigo effect, smooth track-in motion";
+    case "sunset":
+      timeOfDayPrompt = "dramatic sunset lighting, deep orange and purple sky, long shadows, golden rim light, magical hour glow";
       break;
-    case "crane":
-      styleDesc = "sweeping crane shot, vertical high-angle sweep";
+    case "night":
+      timeOfDayPrompt = "nighttime atmosphere, moonlight or artificial lights, deep shadows, cool blue tones, starry sky if outdoors";
       break;
-    case "orbit":
-      styleDesc = "orbiting 360-degree camera spin, steady rotation around subject";
-      break;
-    case "fpv":
-      styleDesc = "dynamic FPV racing drone shot, fast acrobatic camera weave";
-      break;
-    case "panoramic":
-      styleDesc = "panoramic wide lens sweep, capturing extreme wide scenery";
-      break;
-    default:
-      styleDesc = "cinematic camera movement";
   }
 
-  // 2. Camera Motions (Pan, Tilt, Zoom, Roll)
+  // 2. Camera Style / Lens descriptor (only if not "auto")
+  let styleDesc = "";
+  if (settings.style !== "auto") {
+    switch (settings.style) {
+      case "static":
+        styleDesc = "static studio shot, locked tripod lock-on";
+        break;
+      case "drone":
+        styleDesc = "cinematic drone shot, aerial flyover perspective";
+        break;
+      case "handheld":
+        styleDesc = "raw handheld shaky cam style, documentary look";
+        break;
+      case "dolly":
+        styleDesc = "dolly zoom vertigo effect, smooth track-in motion";
+        break;
+      case "crane":
+        styleDesc = "sweeping crane shot, vertical high-angle sweep";
+        break;
+      case "orbit":
+        styleDesc = "orbiting 360-degree camera spin, steady rotation around subject";
+        break;
+      case "fpv":
+        styleDesc = "dynamic FPV racing drone shot, fast acrobatic camera weave";
+        break;
+      case "panoramic":
+        styleDesc = "panoramic wide lens sweep, capturing extreme wide scenery";
+        break;
+      default:
+        styleDesc = "";
+    }
+  }
+
+  // 3. Motion Curve descriptor
+  let motionCurveDesc = "";
+  switch (settings.motionCurve) {
+    case "linear":
+      motionCurveDesc = "steady constant-speed movement";
+      break;
+    case "ease-in":
+      motionCurveDesc = "starting slow and accelerating smoothly";
+      break;
+    case "ease-out":
+      motionCurveDesc = "starting fast and decelerating to gentle stop";
+      break;
+    case "ease-in-out":
+      motionCurveDesc = "starting slow, accelerating mid-way, then decelerating smoothly";
+      break;
+  }
+
+  // 4. Camera Motions (Pan, Tilt, Zoom, Roll)
   const motions: string[] = [];
   const speedPrefix = settings.speed === "slow" ? "slowly " : settings.speed === "fast" ? "rapidly " : "smoothly ";
 
@@ -97,16 +136,23 @@ export function compileCameraPrompt(settings: CameraSettings): string {
   }
 
   // Final compilation
-  if (settings.style === "static" && motions.length === 0) {
-    return "static shot, no camera motion";
+  // Always include time of day
+  parts.push(timeOfDayPrompt);
+
+  // Add camera style if not auto
+  if (styleDesc) {
+    parts.push(styleDesc);
   }
 
-  const cameraParts = [styleDesc];
+  // Add motion details
   if (motionDesc) {
-    cameraParts.push(motionDesc);
+    parts.push(motionDesc);
+    if (motionCurveDesc) {
+      parts.push(motionCurveDesc);
+    }
   }
 
-  return cameraParts.join(", ");
+  return parts.join(", ");
 }
 
 /**

@@ -77,6 +77,7 @@ import {
   saveReferenceFrame,
   deleteReferenceFrame
 } from "./lib/supabase";
+import { deleteTaskDoc } from "./lib/firebase";
 
 const parseTimestampToSeconds = (val: any): number => {
   if (!val) return Math.floor(Date.now() / 1000);
@@ -338,7 +339,9 @@ export default function App() {
     zoom: "none",
     roll: "none",
     speed: "normal",
-    style: "drone",
+    style: "auto",
+    timeOfDay: "day",
+    motionCurve: "ease-in-out",
   });
 
   // 3. Prompt & API key state
@@ -1162,7 +1165,9 @@ export default function App() {
       zoom: clip.cameraSettings.zoom as any,
       roll: clip.cameraSettings.roll as any,
       speed: clip.cameraSettings.speed as any,
-      style: clip.cameraSettings.style as any
+      style: clip.cameraSettings.style as any,
+      timeOfDay: clip.cameraSettings.timeOfDay as any,
+      motionCurve: clip.cameraSettings.motionCurve as any
     });
 
     const composer = document.getElementById("prompt-textarea");

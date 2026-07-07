@@ -745,9 +745,11 @@ JSON Schema:
                           zoom: { type: Type.STRING, description: "Must be one of: 'none', 'in', 'out'" },
                           roll: { type: Type.STRING, description: "Must be one of: 'none', 'clockwise', 'counter_clockwise'" },
                           speed: { type: Type.STRING, description: "Must be one of: 'normal', 'slow', 'fast'" },
-                          style: { type: Type.STRING, description: "Must be one of: 'static', 'drone', 'handheld', 'dolly', 'crane', 'orbit', 'fpv', 'panoramic'" }
+                          style: { type: Type.STRING, description: "Must be one of: 'auto', 'static', 'drone', 'handheld', 'dolly', 'crane', 'orbit', 'fpv', 'panoramic'. Use 'auto' to let camera movement come from the prompt." },
+                          timeOfDay: { type: Type.STRING, description: "Must be one of: 'dawn', 'day', 'afternoon', 'sunset', 'night'. Defines the lighting and atmosphere for the animated series look." },
+                          motionCurve: { type: Type.STRING, description: "Must be one of: 'linear', 'ease-in', 'ease-out', 'ease-in-out'. Defines the acceleration/deceleration rhythm." }
                         },
-                        required: ["pan", "tilt", "zoom", "roll", "speed", "style"]
+                        required: ["pan", "tilt", "zoom", "roll", "speed", "style", "timeOfDay", "motionCurve"]
                       },
                       duration: { type: Type.INTEGER, description: "Between 4 and 15 seconds" },
                       generate_audio: { type: Type.BOOLEAN, description: "Whether audio should be generated" },
