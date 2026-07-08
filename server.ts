@@ -1581,16 +1581,20 @@ JSON Schema:
           const d = (typeof responseData.details === 'object' ? responseData.details : {}) as Record<string, any>;
           const rawMsg = JSON.stringify(responseData).toLowerCase();
           const isDailyLimit = rawMsg.includes("daily limit") || rawMsg.includes("exceeded the daily");
-          // Priority: 1) API body seconds_until_reset  2) x-rate-limit-window header  3) 15min fallback
-          const resetSeconds = d.seconds_until_reset || rateLimitWindow || 900;
+          
+          // Priority: 1) API body seconds_until_reset (exact reset time known)
+          //           2) API body reset_time string (exact time known)
+          //           3) 15 min retry — do NOT use x-rate-limit-window (it's the WINDOW SIZE, not wait time)
+          //              We don't know where in the window we are, so retry in 15 min and let API decide
+          const resetSeconds = d.seconds_until_reset || 900; // 15 min retry if no exact time
           const resetTimeStr = d.reset_time || undefined;
           const usage = d.current_usage ?? 5;
           const limit = (typeof d.limit === 'number') ? d.limit : 5;
           const hitKeyInfo = apiKeys.find(k => k.key === apiKey);
           if (hitKeyInfo) { hitKeyInfo.currentUsage = usage; hitKeyInfo.limit = limit; }
           markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
-          const waitDesc = `bloqueada ~${Math.ceil(resetSeconds/60)} min ${isDailyLimit ? '(límite diario/ventana)' : '(rate limit)'}`;
-          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} ${waitDesc} | window header=${rateLimitWindow ?? 'n/a'}s`);
+          const waitSource = d.seconds_until_reset ? 'dato exacto del API' : 'reintento en 15min (sin reset_time en respuesta)';
+          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada ~${Math.ceil(resetSeconds/60)}min | ${isDailyLimit ? 'daily limit' : 'rate limit'} | ${waitSource}`);
 
           // Auto-retry ONLY if next key is confirmed available (not rate-limited)
           // NEVER retry with a blocked key — the API penalizes each retry with +15 min
