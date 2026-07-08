@@ -1,68 +1,35 @@
 /**
- * Authentication Component - Login/Signup
+ * Authentication Component - Login Only
+ * Registro desactivado: usuarios deben ser creados manualmente desde Supabase Dashboard
  */
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, UserPlus, Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-
-type AuthMode = 'login' | 'signup' | 'reset';
+import { LogIn, Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function AuthPage() {
-  const { signIn, signUp, resetPassword } = useAuth();
-  const [mode, setMode] = useState<AuthMode>('login');
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
     setLoading(true);
 
     try {
-      if (mode === 'reset') {
-        const { error: resetError } = await resetPassword(email);
-        if (resetError) {
-          setError(resetError.message);
-        } else {
-          setSuccess('Se ha enviado un enlace de recuperación a tu correo electrónico.');
-          setEmail('');
-        }
-      } else if (mode === 'signup') {
-        if (password.length < 6) {
-          setError('La contraseña debe tener al menos 6 caracteres');
-          setLoading(false);
-          return;
-        }
-        const { error: signUpError } = await signUp(email, password, fullName);
-        if (signUpError) {
-          setError(signUpError.message);
-        } else {
-          setSuccess('¡Cuenta creada exitosamente! Revisa tu correo para confirmar tu cuenta.');
-        }
-      } else {
-        const { error: signInError } = await signIn(email, password);
-        if (signInError) {
-          setError('Credenciales incorrectas. Por favor verifica tu correo y contraseña.');
-        }
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) {
+        setError('Credenciales incorrectas. Por favor verifica tu correo y contraseña.');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setLoading(false);
     }
-  };
-
-  const switchMode = (newMode: AuthMode) => {
-    setMode(newMode);
-    setError('');
-    setSuccess('');
   };
 
   return (
@@ -83,9 +50,7 @@ export default function AuthPage() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Persistencia Studio</h1>
           <p className="text-gray-600 mt-2">
-            {mode === 'login' && 'Inicia sesión para continuar'}
-            {mode === 'signup' && 'Crea tu cuenta para comenzar'}
-            {mode === 'reset' && 'Recupera tu contraseña'}
+            Inicia sesión para continuar
           </p>
         </div>
 
@@ -97,36 +62,8 @@ export default function AuthPage() {
           </div>
         )}
 
-        {/* Success Message */}
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-green-800">{success}</p>
-          </div>
-        )}
-
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Full Name (only for signup) */}
-          {mode === 'signup' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre completo
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  placeholder="Tu nombre"
-                  required={mode === 'signup'}
-                />
-              </div>
-            </div>
-          )}
-
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -145,42 +82,35 @@ export default function AuthPage() {
             </div>
           </div>
 
-          {/* Password (not for reset) */}
-          {mode !== 'reset' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Contraseña
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-              {mode === 'signup' && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Mínimo 6 caracteres
-                </p>
-              )}
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Contraseña
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-11 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Submit Button */}
           <button
@@ -195,69 +125,18 @@ export default function AuthPage() {
               </>
             ) : (
               <>
-                {mode === 'login' && (
-                  <>
-                    <LogIn className="w-5 h-5" />
-                    Iniciar sesión
-                  </>
-                )}
-                {mode === 'signup' && (
-                  <>
-                    <UserPlus className="w-5 h-5" />
-                    Crear cuenta
-                  </>
-                )}
-                {mode === 'reset' && (
-                  <>
-                    <Mail className="w-5 h-5" />
-                    Enviar enlace
-                  </>
-                )}
+                <LogIn className="w-5 h-5" />
+                Iniciar sesión
               </>
             )}
           </button>
         </form>
 
-        {/* Mode Switcher */}
-        <div className="mt-6 text-center space-y-2">
-          {mode === 'login' && (
-            <>
-              <button
-                onClick={() => switchMode('reset')}
-                className="text-sm text-purple-600 hover:text-purple-700 font-medium"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-              <div className="text-sm text-gray-600">
-                ¿No tienes cuenta?{' '}
-                <button
-                  onClick={() => switchMode('signup')}
-                  className="text-purple-600 hover:text-purple-700 font-medium"
-                >
-                  Regístrate
-                </button>
-              </div>
-            </>
-          )}
-          {mode === 'signup' && (
-            <div className="text-sm text-gray-600">
-              ¿Ya tienes cuenta?{' '}
-              <button
-                onClick={() => switchMode('login')}
-                className="text-purple-600 hover:text-purple-700 font-medium"
-              >
-                Inicia sesión
-              </button>
-            </div>
-          )}
-          {mode === 'reset' && (
-            <button
-              onClick={() => switchMode('login')}
-              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
-            >
-              Volver al inicio de sesión
-            </button>
-          )}
+        {/* Info Message */}
+        <div className="mt-6 text-center">
+          <p className="text-xs text-gray-500">
+            Los usuarios deben ser creados por un administrador.
+          </p>
         </div>
       </div>
 

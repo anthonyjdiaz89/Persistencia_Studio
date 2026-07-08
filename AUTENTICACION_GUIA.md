@@ -4,27 +4,25 @@
 
 Persistencia Studio ahora cuenta con un sistema completo de autenticación usando Supabase Auth.
 
+⚠️ **IMPORTANTE:** El registro público está DESACTIVADO. Los usuarios deben ser creados manualmente por el administrador desde el Dashboard de Supabase.
+
 ---
 
 ## ✨ Características
 
-### 1. **Registro de Usuarios**
-- ✅ Crear cuenta con email y contraseña
-- ✅ Validación: mínimo 6 caracteres para contraseña
-- ✅ Confirmación por email
-- ✅ Campo opcional para nombre completo
-
-### 2. **Inicio de Sesión**
+### 1. **Inicio de Sesión**
 - ✅ Login con email y contraseña
 - ✅ Sesión persistente (se mantiene al recargar)
 - ✅ Auto-refresh de tokens
 - ✅ Toggle para mostrar/ocultar contraseña
+- ✅ Validación de credenciales
 
-### 3. **Recuperación de Contraseña**
-- ✅ Envío de enlace de recuperación por email
-- ✅ Flujo completo de reset password
+### 2. **Gestión de Usuarios** (Solo Administradores)
+- ✅ Crear usuarios manualmente desde Supabase Dashboard
+- ✅ Asignar contraseñas temporales
+- ✅ Gestionar permisos y datos de usuario
 
-### 4. **Gestión de Sesión**
+### 3. **Gestión de Sesión**
 - ✅ Logout con un click
 - ✅ Muestra email del usuario en header
 - ✅ Protección automática de rutas
@@ -34,19 +32,86 @@ Persistencia Studio ahora cuenta con un sistema completo de autenticación usand
 
 ## 📱 Flujo de Usuario
 
-### Primera Vez (Nuevo Usuario)
+### Para Usuarios Finales
 
-1. **Abrir la aplicación** → Pantalla de auth animada
-2. **Click en "Regístrate"** → Formulario de registro
-3. **Llenar datos:**
-   - Nombre completo (opcional)
-   - Email
-   - Contraseña (mínimo 6 caracteres)
-4. **Click en "Crear cuenta"**
-5. **Revisar email** → Confirmar cuenta
-6. **Volver y hacer login** → Acceso a la aplicación
+1. **Recibir credenciales** del administrador (email y contraseña temporal)
+2. **Abrir la aplicación** → Pantalla de login
+3. **Ingresar credenciales:**
+   - Email proporcionado por el admin
+   - Contraseña temporal
+4. **Click en "Iniciar sesión"** → Acceso a la aplicación
+5. **Opcional:** Cambiar contraseña desde perfil
 
-### Usuario Existente
+### Para Administradores (Crear Usuarios)
+
+1. **Abrir Supabase Dashboard** → https://bd.persistenciadigital.com
+2. **Ir a Authentication** → Users
+3. **Click en "Add user"** → Botón verde
+4. **Llenar el formulario:**
+   - **Email:** Email del nuevo usuario (debe ser válido)
+   - **Password:** Contraseña temporal (mínimo 6 caracteres)
+   - **Auto Confirm User:** ✅ Marcar (para que pueda hacer login inmediatamente)
+   - **Email Confirm:** ✅ Marcar
+5. **Click en "Create user"**
+6. **Copiar credenciales** y enviarlas al usuario de forma segura
+7. **Verificar creación:** El usuario debe aparecer en la tabla con estado "Confirmed"
+
+**Ejemplo de credenciales a enviar:**
+```
+Email: usuario@ejemplo.com
+Contraseña temporal: Temp123456
+URL: https://tu-app.com
+
+Por favor cambia tu contraseña después del primer login.
+```
+
+**Gestión de usuarios existentes:**
+- **Ver usuarios:** Authentication → Users (lista completa)
+- **Editar usuario:** Click en el email → Editar datos
+- **Eliminar usuario:** Click en el email → Delete user
+- **Resetear contraseña:** Click en el email → Send password reset email
+- **Ver sesiones activas:** Authentication → Users → Click en email → Sessions
+
+---
+
+## 🔐 Cambiar Contraseña (Usuarios)
+
+Actualmente el sistema no tiene interfaz para que los usuarios cambien su contraseña. Opciones:
+
+### Opción 1: Desde Supabase Dashboard (Recomendado)
+1. Administrador va a Authentication → Users
+2. Click en el email del usuario
+3. Click en "Send password reset email"
+4. Usuario recibe email con enlace
+5. Sigue el enlace y establece nueva contraseña
+
+### Opción 2: Implementar Cambio de Contraseña en App (Futuro)
+```typescript
+// Código para agregar en el futuro
+const { data, error } = await supabase.auth.updateUser({
+  password: newPassword
+});
+```
+
+---
+
+## 🚫 Por Qué Está Desactivado el Registro Público
+
+**Razones:**
+
+1. **Control de acceso:** Solo usuarios autorizados pueden usar la aplicación
+2. **Costos:** Evita registros spam que consumen recursos
+3. **Gestión:** El administrador conoce y aprueba cada usuario
+4. **Seguridad:** Reduce superficie de ataque (no hay endpoint público de registro)
+5. **Compliance:** Mejor control para auditorías y cumplimiento
+
+**Si necesitas reactivar el registro público:**
+
+Ver archivo `src/components/AuthPage.tsx` líneas 1-10 para instrucciones.
+
+---
+
+## 🎨 UI/UX (Actualizado)
 
 1. **Abrir la aplicación** → Pantalla de login
 2. **Ingresar credenciales:**
@@ -64,16 +129,24 @@ Persistencia Studio ahora cuenta con un sistema completo de autenticación usand
 
 ---
 
-## 🎨 UI/UX
+## 🎨 UI/UX (Actualizado)
 
 ### Pantalla de Autenticación
 
 **Diseño:**
 - Fondo con gradiente animado (burbujas de colores)
 - Logo de Persistencia Studio
-- Formularios limpios y modernos
+- Formulario de login limpio y moderno
 - Validación inline
-- Mensajes de error y éxito destacados
+- Mensajes de error destacados
+- Mensaje informativo: "Los usuarios deben ser creados por un administrador"
+
+**Campos:**
+- Email (requerido)
+- Contraseña (requerido, mínimo 6 caracteres, con toggle show/hide)
+
+**Acciones:**
+- Botón "Iniciar sesión" con loading spinner
 
 **Colores:**
 - Primario: Púrpura/Índigo gradiente
@@ -104,7 +177,7 @@ src/
 ├── contexts/
 │   └── AuthContext.tsx          # Contexto de autenticación
 ├── components/
-│   └── AuthPage.tsx             # UI de login/registro
+│   └── AuthPage.tsx             # UI de login solamente
 ├── AuthenticatedApp.tsx         # Wrapper protegido
 ├── App.tsx                      # App principal (modificado)
 ├── main.tsx                     # Entry point (modificado)
@@ -125,11 +198,11 @@ src/
 
 **Métodos:**
 ```typescript
-signUp(email, password, fullName?)  // Registro
 signIn(email, password)             // Login
 signOut()                           // Logout
-resetPassword(email)                // Recuperación
 ```
+
+**Nota:** `signUp()` y `resetPassword()` están definidos en AuthContext pero no están expuestos en la UI (registro desactivado).
 
 ### AuthenticatedApp
 
@@ -332,28 +405,36 @@ npm run dev
 
 ### Probar Flujos
 
-1. **Registro:**
-   - Usar email real
-   - Verificar recepción de email de confirmación
-   - Confirmar cuenta
-   - Intentar login
+**IMPORTANTE:** Antes de probar, crea un usuario de prueba desde Supabase Dashboard (ver sección "Para Administradores").
+
+1. **Crear Usuario de Prueba:**
+   - Dashboard → Authentication → Users → Add user
+   - Email: test@persistenciastudio.com
+   - Password: Test123456
+   - Auto Confirm: ✅
+   - Email Confirm: ✅
 
 2. **Login:**
-   - Usar credenciales existentes
-   - Verificar que cargue la app
+   - Abrir la app
+   - Ingresar credenciales de prueba
+   - Verificar que cargue la app correctamente
    - Recargar página → sesión persiste
 
 3. **Logout:**
-   - Click en botón logout
-   - Verificar que vuelva a auth
+   - Click en botón logout (icono en header)
+   - Verificar que vuelva a pantalla de auth
    - Intentar acceder directamente → redirige a auth
 
-4. **Reset Password:**
-   - Click en "Olvidaste contraseña"
-   - Ingresar email
-   - Verificar email recibido
-   - Seguir enlace y cambiar contraseña
-   - Login con nueva contraseña
+4. **Persistencia de Sesión:**
+   - Hacer login
+   - Cerrar y abrir navegador
+   - Abrir la app → debe mantener sesión activa
+
+5. **RLS (Row Level Security):**
+   - Crear personaje/prop/location con usuario A
+   - Hacer logout
+   - Login con usuario B
+   - Verificar que NO ve los datos de usuario A
 
 ---
 
@@ -400,16 +481,7 @@ SUPABASE_ANON_KEY=...
 - Revisar modo incógnito (puede bloquear storage)
 - Limpiar cookies y cache
 
-### Problema: "User already registered" al hacer signup
-
-**Causa:** Email ya existe en sistema
-
-**Solución:**
-- Usar otro email
-- O hacer login con ese email
-- O recuperar contraseña si la olvidó
-
-### Problema: "operator does not exist: uuid = text" en RLS
+### Problema: No puedo ver mis datos después de habilitar RLS
 
 **Error completo:**
 ```
@@ -494,10 +566,10 @@ Ver logs de autenticación en:
 ✅ **Passwords hasheados** → Supabase usa bcrypt  
 ✅ **Sesiones con JWT** → Tokens firmados  
 ✅ **Auto-refresh** → Tokens se renuevan automáticamente  
-✅ **Email confirmation** → Previene registros falsos  
 ✅ **Rate limiting** → Supabase aplica límites automáticos  
 ✅ **HTTPS only** → Forzar SSL en producción  
 ✅ **Row Level Security** → Usuarios solo ven sus datos  
+✅ **Registro controlado** → Solo administradores crean usuarios  
 
 ### Recomendaciones Adicionales
 
@@ -569,12 +641,25 @@ Para preguntas o problemas:
 
 ## 📝 Changelog
 
+### 2026-07-08 - v1.1.0
+
+🔒 **Cambio de Seguridad:**
+- **Registro público DESACTIVADO** por seguridad y control de acceso
+- Usuarios deben ser creados manualmente por administradores
+- Eliminados formularios de signup y reset password de la UI
+
+📖 **Documentación:**
+- Agregada sección "Gestión de Usuarios (Solo Administradores)"
+- Guía paso a paso para crear usuarios desde Supabase Dashboard
+- Sección "Por Qué Está Desactivado el Registro Público"
+- Actualizada checklist de implementación
+
 ### 2026-07-08 - v1.0.0
 
 ✨ **Nueva Funcionalidad:**
 - Sistema completo de autenticación con Supabase Auth
 - UI moderna con animaciones
-- Registro, login, logout, reset password
+- Login y logout funcionales
 - Sesiones persistentes
 - Protección de rutas
 - Integración con base de datos existente
@@ -596,17 +681,16 @@ Para preguntas o problemas:
 Para implementar en un nuevo entorno:
 
 - [ ] Variables de entorno configuradas (SUPABASE_URL, SUPABASE_ANON_KEY)
-- [ ] Email provider configurado en Supabase
-- [ ] Email templates personalizados
-- [ ] Redirect URLs configuradas
+- [ ] Redirect URLs configuradas (si se implementa reset password en el futuro)
 - [ ] RLS habilitado en todas las tablas
-- [ ] Políticas RLS creadas
-- [ ] Testing de registro completo
+- [ ] Políticas RLS creadas (con cast ::text)
+- [ ] Crear usuario de prueba desde Dashboard
 - [ ] Testing de login completo
 - [ ] Testing de logout completo
-- [ ] Testing de reset password completo
 - [ ] Testing de persistencia de sesión
+- [ ] Testing de RLS (usuarios no ven datos de otros)
 - [ ] Monitoreo de logs habilitado
+- [ ] Documentar proceso de creación de usuarios para administradores
 - [ ] Documentación compartida con equipo
 
 ---
