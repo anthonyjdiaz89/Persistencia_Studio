@@ -995,23 +995,38 @@ JSON Schema:
     keyLastRequestTime.set(keyString, Date.now());
   };
 
-  // ── Exponential Backoff (transient 5xx only — NOT for 429) ────
+  // ── Exponential Backoff (transient 5xx only — NOT for 429 or quota limits) ────
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-  const fetchWithTransientRetry = async (url: string, opts: RequestInit, maxRetries = 2): Promise<{ response: Response; data: any }> => {
+  const QUOTA_KEYWORDS = ["daily limit", "rate limit", "exceeded", "points used", "quota", "insufficient balance"];
+  const isQuotaError = (data: any, status: number): boolean => {
+    if (status === 429) return true;
+    const body = JSON.stringify(data).toLowerCase();
+    return QUOTA_KEYWORDS.some(k => body.includes(k));
+  };
+
+  const fetchWithTransientRetry = async (url: string, opts: RequestInit, maxRetries = 2): Promise<{ response: Response; data: any; rateLimitWindow?: number }> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const response = await fetch(url, opts);
       const data = await response.json();
-      // Retry only on transient 5xx (not 429 — API penalizes retries during rate limit)
-      if (response.status >= 500 && response.status !== 529 && attempt < maxRetries) {
-        const backoff = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+      // Extract x-rate-limit-window header if present (tells us the real window)
+      const rateLimitWindow = response.headers.get('x-rate-limit-window')
+        ? parseInt(response.headers.get('x-rate-limit-window')!, 10)
+        : undefined;
+      // Quota/rate-limit errors: NEVER retry (API penalizes retries)
+      if (isQuotaError(data, response.status)) {
+        console.warn(`[Backoff] Quota/rate-limit error (HTTP ${response.status}) — NOT retrying. Window: ${rateLimitWindow ?? 'unknown'}s`);
+        return { response, data, rateLimitWindow };
+      }
+      // Retry only truly transient 5xx (network blip, server restart, etc.)
+      if (response.status >= 500 && attempt < maxRetries) {
+        const backoff = Math.pow(2, attempt) * 1000; // 1s, 2s
         console.warn(`[Backoff] HTTP ${response.status} transient error — retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})`);
         await sleep(backoff);
         continue;
       }
-      return { response, data };
+      return { response, data, rateLimitWindow };
     }
-    // Should never reach here, but TypeScript needs it
     const response = await fetch(url, opts);
     return { response, data: await response.json() };
   };
@@ -1513,16 +1528,14 @@ JSON Schema:
       console.log("[VideoGenAPI Proxy] 📹 RESOLUTION BEING SENT:", payload.resolution);
       console.log("[VideoGenAPI Proxy] Forwarding creation request to VideoGenAPI...", JSON.stringify(payload));
 
-      const response = await fetch("https://videogenapi.com/api/v1/generate", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+      // ── Request Queue: space 1.5s apart per key to avoid burst ──
+      await waitForKeySpacing(apiKey);
 
-      const responseData = await response.json();
+      // ── Fetch with backoff for transient 5xx; quota/rate errors are NOT retried ──
+      const { response, data: responseData, rateLimitWindow } = await fetchWithTransientRetry(
+        "https://videogenapi.com/api/v1/generate",
+        { method: "POST", headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+      );
 
       // ── Monitor rate_limit from API response (proactive tracking) ──
       if (responseData.rate_limit) {
@@ -1554,33 +1567,30 @@ JSON Schema:
           JSON.stringify(responseData).toLowerCase().includes("daily limit");
 
         if (isRateLimit) {
-          const d = responseData.details || {};
+          const d = (typeof responseData.details === 'object' ? responseData.details : {}) as Record<string, any>;
           const rawMsg = JSON.stringify(responseData).toLowerCase();
           const isDailyLimit = rawMsg.includes("daily limit") || rawMsg.includes("exceeded the daily");
-          // API is source of truth: use seconds_until_reset if provided, else retry in 30 min
-          const resetSeconds = d.seconds_until_reset || (isDailyLimit ? 30 * 60 : 900);
+          // Priority: 1) API body seconds_until_reset  2) x-rate-limit-window header  3) 15min fallback
+          const resetSeconds = d.seconds_until_reset || rateLimitWindow || 900;
           const resetTimeStr = d.reset_time || undefined;
           const usage = d.current_usage ?? 5;
           const limit = (typeof d.limit === 'number') ? d.limit : 5;
           const hitKeyInfo = apiKeys.find(k => k.key === apiKey);
           if (hitKeyInfo) { hitKeyInfo.currentUsage = usage; hitKeyInfo.limit = limit; }
           markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
-          const waitDesc = isDailyLimit
-            ? `bloqueada (reintento en ${Math.ceil(resetSeconds/60)} min — la API dirá si sigue bloqueada)`
-            : `~${Math.ceil(resetSeconds/60)} min (dato real del API)`;
-          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada: ${waitDesc}.`);
+          const waitDesc = `bloqueada ~${Math.ceil(resetSeconds/60)} min ${isDailyLimit ? '(límite diario/ventana)' : '(rate limit)'}`;
+          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} ${waitDesc} | window header=${rateLimitWindow ?? 'n/a'}s`);
 
           // Auto-retry ONLY if next key is confirmed available (not rate-limited)
           // NEVER retry with a blocked key — the API penalizes each retry with +15 min
           const nextKey = selectBestAvailableApiKey();
           if (nextKey && nextKey.key !== apiKey && nextKey.isAvailable) {
             console.log(`[VideoGenAPI Proxy] 🔄 Auto-switching to ${nextKey.alias} (confirmed available)`);
-            const retryResponse = await fetch("https://videogenapi.com/api/v1/generate", {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${nextKey.key}`, "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            const retryData = await retryResponse.json();
+            await waitForKeySpacing(nextKey.key);
+            const { response: retryResponse, data: retryData } = await fetchWithTransientRetry(
+              "https://videogenapi.com/api/v1/generate",
+              { method: "POST", headers: { "Authorization": `Bearer ${nextKey.key}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+            );
             if (retryResponse.ok) {
               nextKey.currentUsage = (nextKey.currentUsage || 0) + 1;
               saveKeyStates();

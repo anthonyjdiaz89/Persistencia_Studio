@@ -1,0 +1,18 @@
+[
+  {
+    "alias": "Key 1",
+    "keyPreview": "lannetech_07cde",
+    "isAvailable": false,
+    "rateLimitResetTime": 1783541466709,
+    "currentUsage": 5,
+    "limit": 5
+  },
+  {
+    "alias": "Key 2",
+    "keyPreview": "lannetech_a856d",
+    "isAvailable": false,
+    "rateLimitResetTime": 1783540567720,
+    "currentUsage": 5,
+    "limit": 5
+  }
+]
