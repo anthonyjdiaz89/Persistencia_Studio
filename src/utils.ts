@@ -483,7 +483,7 @@ export function compileFinalPrompt(
         // For multi-view locations, use special wording that prevents combining views
         const isMultiViewLocation = normalized === 'isla' || normalized === 'island';
         const imageRef = isMultiViewLocation
-          ? ` [Image${imageIndexForThisMention}] 🎬 REFERENCIA DE DISEÑO (elegir UNA vista apropiada para la acción, NO combinar todas las vistas en una sola escena)`
+          ? ` [Image${imageIndexForThisMention}] 🎬 REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar)`
           : ` [Image${imageIndexForThisMention}] ⚠️ USAR ELEMENTOS DE LA IMAGEN`;
         refToken = imageRef;
         descSuffix = proportionInfo ? ` (${proportionInfo})` : "";
@@ -586,8 +586,8 @@ export function compileFinalPrompt(
   let multiViewLocationInstruction = "";
   if (hasMultiViewLocation) {
     multiViewLocationInstruction = isSpanish
-      ? "[🎬 INSTRUCCIÓN CRÍTICA LOCACIÓN MULTI-VISTA: La imagen de referencia de la isla muestra 4 PANELES (vista aérea, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. Estos paneles son SOLO REFERENCIA DE DISEÑO para conocer cómo se ve la isla. PROHIBIDO renderizar los 4 paneles simultáneamente en la escena. PROHIBIDO crear 2 o más islas/casas. ELEGIR UNA vista apropiada para la acción (por ejemplo: si camina en la playa usar vista frontal/lateral, si vuela usar vista aérea). La escena debe mostrar UNA SOLA isla coherente, NO una mezcla de todos los paneles juntos.] "
-      : "[🎬 CRITICAL MULTI-VIEW LOCATION INSTRUCTION: The island reference image shows 4 PANELS (aerial, frontal, lateral, detail) which are DIFFERENT ANGLES OF THE SAME ISLAND. These panels are ONLY DESIGN REFERENCE to know what the island looks like. FORBIDDEN to render all 4 panels simultaneously in the scene. FORBIDDEN to create 2 or more islands/houses. CHOOSE ONE appropriate view for the action (e.g., if walking on beach use frontal/lateral view, if flying use aerial view). The scene must show ONE SINGLE coherent island, NOT a mixture of all panels together.] ";
+      ? "[🎬 INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] "
+      : "[🎬 CRITICAL LOCATION INSTRUCTION: The island reference image shows 4 PANELS (aerial, frontal, lateral, detail) which are DIFFERENT ANGLES OF THE SAME ISLAND. ⚠️ FUNDAMENTAL CONCEPT: The location is NOT the background landscape, it is the ENVIRONMENT WHERE THE CHARACTER IS SITUATED. If the character walks on the island, he is STANDING/WALKING ON the island's surface (sand, grass, dock wood). The island should NOT appear as a distant landscape in the background. FORBIDDEN to render all 4 panels simultaneously. FORBIDDEN to create 2 or more islands. CHOOSE ONE appropriate view to situate the character IN that place. The character is IN/ON the location, NOT looking at it from another place.] ";
   }
   
   // GLOBAL RULE: Do not add elements not explicitly mentioned
@@ -600,11 +600,16 @@ export function compileFinalPrompt(
       : `[⚠️ EXACT COUNT: ONLY ${mentionedCharacters.length} character(s) in scene: ${charNames}. DO NOT duplicate any character. DO NOT add extra people. EXACTLY ${mentionedCharacters.length} character(s), no more no less.] `;
   }
   
+  // Add location interpretation instruction
+  const locationInterpretationInstruction = isSpanish
+    ? "[📍 REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] "
+    : "[📍 LOCATION RULE: When a location is mentioned (e.g., 'on the island', 'at the beach'), the character is SITUATED IN/ON that place, NOT looking at it. The location is the GROUND/ENVIRONMENT where the character is standing/walking/sitting. DO NOT render the location as a distant landscape or island in the background. The character and location share the SAME physical SPACE.] ";
+  
   const noExtraElementsInstruction = isSpanish
     ? "[🚫 REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] "
     : "[🚫 STRICT GLOBAL RULE: DO NOT add characters, objects, animals or additional elements that are not EXPLICITLY mentioned in the prompt. ONLY render exactly what is requested. DO NOT invent extras, background people, additional props, tools, utensils, or decorative elements. If it's not textually mentioned in the prompt or as [ImageX], it should NOT appear in the scene. FORBIDDEN to add context or environment elements not requested.] ";
   
-  finalPrompt = multiViewLocationInstruction + characterCountInstruction + noExtraElementsInstruction + finalPrompt;
+  finalPrompt = multiViewLocationInstruction + locationInterpretationInstruction + characterCountInstruction + noExtraElementsInstruction + finalPrompt;
   
   // Add emphatic reference image instruction at the very start if there are character images
   if (mentionedCharacters.length > 0 && refImages.length > 0) {
