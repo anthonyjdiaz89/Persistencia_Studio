@@ -8,6 +8,8 @@ Professional video generation studio powered by VideoGenAPI with multi-model sup
 
 🔗 **GitHub Repository:** https://github.com/anthonyjdiaz89/Persistencia_Studio
 
+> **🔥 Latest Update (2026-07-08):** Fixed production deployment issue - Frontend now correctly connects to backend in Coolify monorepo architecture. See [GUIA_PRODUCCION_RAPIDA.md](GUIA_PRODUCCION_RAPIDA.md) for details.
+
 ---
 
 ## ✨ Features
@@ -20,6 +22,8 @@ Professional video generation studio powered by VideoGenAPI with multi-model sup
 - 🤖 **AI Director**: Generate complete scene blueprints with temporal continuity
 - 🌍 **Colombia Timezone**: All timestamps displayed in America/Bogota (UTC-5)
 - 🔒 **Self-Hosted Ready**: Full support for Coolify/Docker deployments
+- 📦 **Monorepo Architecture**: Single deployment includes frontend + backend (no CORS issues)
+- 🔄 **Auto-Deploy**: Works with Coolify auto-deploy on every push
 
 ---
 
@@ -127,11 +131,43 @@ vercel --prod
 # Configure via: Variables tab → Add all .env variables
 ```
 
-#### Coolify 🧊 (Self-Hosted)
+#### Coolify 🧊 (Self-Hosted - Recommended for Monorepo)
+
+**✅ Perfect for:** Auto-deploy on every GitHub push, self-hosted infrastructure
+
 ```bash
-# Add environment variables in format: KEY=VALUE
-# Save → Restart application
+# 1. Create Application in Coolify
+#    - Type: Docker Compose or Dockerfile
+#    - Source: Connect your GitHub repository
+#    - Branch: main
+
+# 2. Build Configuration
+Build Command: npm run build
+Start Command: npm start
+Port: 3000
+
+# 3. Environment Variables (⚠️ CRITICAL - Add in Coolify Dashboard)
+VIDEOGEN_API_KEY_1=lannetech_07cde6a6f9f1a7df65331b46c65948498a1c7042e8ad1338c6fb25510fd15337
+VIDEOGEN_API_KEY_2=lannetech_a856d87d151fb8b5459fcc39ddb9957cb6809aa7f2559b8ab2763d63ef7384ee
+SUPABASE_URL=https://bd.persistenciadigital.com
+SUPABASE_ANON_KEY=your_supabase_anon_key
+GEMINI_API_KEY=your_gemini_key (optional)
+
+# ⚠️ DO NOT ADD VITE_API_URL (monorepo uses relative paths)
+
+# 4. Auto-Deploy Settings
+Enable: "Automatic deployment on push"
+Webhook: Coolify generates this automatically
+
+# 5. Verify Deployment
+curl https://your-coolify-domain.com/api/config
+# Should return: {"status": "ok", "hasApiKey": true, "totalKeys": 2}
 ```
+
+**Troubleshooting Coolify:**
+- ❌ "Cannot GET /api/config" → Backend not started, check build logs
+- ❌ "hasApiKey: false" → Environment variables not configured
+- ✅ "hasApiKey: true" → Everything working correctly
 
 ### Required Environment Variables
 
