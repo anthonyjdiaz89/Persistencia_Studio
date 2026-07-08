@@ -601,15 +601,26 @@ export function compileFinalPrompt(
   }
   
   // Add location interpretation instruction
-  const locationInterpretationInstruction = isSpanish
-    ? "[📍 REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] "
-    : "[📍 LOCATION RULE: When a location is mentioned (e.g., 'on the island', 'at the beach'), the character is SITUATED IN/ON that place, NOT looking at it. The location is the GROUND/ENVIRONMENT where the character is standing/walking/sitting. DO NOT render the location as a distant landscape or island in the background. The character and location share the SAME physical SPACE.] ";
-  
+  // Location rule — ONLY when characters are present; otherwise model invents a character to "situate"
+  const locationInterpretationInstruction = (mentionedCharacters.length > 0)
+    ? (isSpanish
+      ? "[📍 REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] "
+      : "[📍 LOCATION RULE: When a location is mentioned (e.g., 'on the island', 'at the beach'), the character is SITUATED IN/ON that place, NOT looking at it. The location is the GROUND/ENVIRONMENT where the character is standing/walking/sitting. DO NOT render the location as a distant landscape or island in the background. The character and location share the SAME physical SPACE.] ")
+    : "";
+
+  // When there are NO characters, explicitly forbid the model from inventing one
+  const hasLocationWithImage = mentionedAssetsWithImages.some(a => a?.type === 'location');
+  const noCharacterInstruction = (mentionedCharacters.length === 0 && hasLocationWithImage)
+    ? (isSpanish
+      ? "[🚫 SIN PERSONAJES: Esta escena es un PLANO DE PAISAJE PURO. NO incluir ningún personaje humano, figura humana, silueta de persona, ni animal en la escena. Es exclusivamente un plano del entorno: naturaleza, arquitectura y atmósfera solamente.] "
+      : "[🚫 NO CHARACTERS: This is a PURE LANDSCAPE SHOT. DO NOT include any human character, human figure, human silhouette, or animal in the scene. Environment, architecture, and atmosphere only.] ")
+    : "";
+
   const noExtraElementsInstruction = isSpanish
     ? "[🚫 REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] "
     : "[🚫 STRICT GLOBAL RULE: DO NOT add characters, objects, animals or additional elements that are not EXPLICITLY mentioned in the prompt. ONLY render exactly what is requested. DO NOT invent extras, background people, additional props, tools, utensils, or decorative elements. If it's not textually mentioned in the prompt or as [ImageX], it should NOT appear in the scene. FORBIDDEN to add context or environment elements not requested.] ";
   
-  finalPrompt = multiViewLocationInstruction + locationInterpretationInstruction + characterCountInstruction + noExtraElementsInstruction + finalPrompt;
+  finalPrompt = multiViewLocationInstruction + locationInterpretationInstruction + noCharacterInstruction + characterCountInstruction + noExtraElementsInstruction + finalPrompt;
   
   // Add emphatic reference image instruction at the very start if there are character images
   if (mentionedCharacters.length > 0 && refImages.length > 0) {
