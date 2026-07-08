@@ -977,7 +977,7 @@ JSON Schema:
 
   // Select best available API key (round-robin, always tries — never blocks locally)
   // The API is the source of truth for rate limits, not our internal timer.
-  let lastUsedKeyIndex = -1;
+  // No round-robin index needed — strategy is "drain first, then switch"
   const selectBestAvailableApiKey = (ignoreRateLimit = false): ApiKeyInfo | null => {
     if (apiKeys.length === 0) return null;
     
@@ -999,14 +999,15 @@ JSON Schema:
       return apiKeys[0];
     }
     
-    // Prefer keys marked available (round-robin)
-    for (let i = 0; i < apiKeys.length; i++) {
-      lastUsedKeyIndex = (lastUsedKeyIndex + 1) % apiKeys.length;
-      const candidate = apiKeys[lastUsedKeyIndex];
-      if (candidate.isAvailable) {
-        console.log(`[Multi-Key System] Selected ${candidate.alias} (${candidate.currentUsage}/${candidate.limit} used)`);
-        return candidate;
-      }
+    // STRATEGY: DRAIN FIRST, THEN SWITCH
+    // Always use the first available key — do NOT round-robin.
+    // This exhausts Key1 (5 req) fully before touching Key2.
+    // That way Key1's 15-min reset starts ~15 requests BEFORE Key2's limit,
+    // so by the time Key2 is also exhausted, Key1 is already available again.
+    const firstAvailable = apiKeys.find(k => k.isAvailable);
+    if (firstAvailable) {
+      console.log(`[Multi-Key System] Selected ${firstAvailable.alias} (${firstAvailable.currentUsage}/${firstAvailable.limit} used) [drain-first strategy]`);
+      return firstAvailable;
     }
     
     // All keys show as rate-limited locally — but we don't know the real API state.
