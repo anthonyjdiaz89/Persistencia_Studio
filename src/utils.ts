@@ -576,11 +576,11 @@ export function compileFinalPrompt(
   }
   
   // MULTI-VIEW LOCATION INSTRUCTION: Add at the very beginning if there's a multi-view location
-  const mentionedLocations = Object.keys(mentioned).filter(key => assetLookup.get(key)?.type === 'location');
-  const hasMultiViewLocation = mentionedLocations.some(locKey => {
-    const loc = assetLookup.get(locKey)?.asset as LocationAsset;
-    const normalized = normalizeForMatching(loc?.name || '');
-    return (normalized === 'isla' || normalized === 'island') && loc?.imageUrl;
+  const hasMultiViewLocation = mentionedAssetsWithImages.some(assetInfo => {
+    if (assetInfo!.type !== 'location') return false;
+    const loc = assetInfo!.asset as LocationAsset;
+    const normalized = normalizeForMatching(loc.name);
+    return (normalized === 'isla' || normalized === 'island') && loc.imageUrl;
   });
   
   let multiViewLocationInstruction = "";
