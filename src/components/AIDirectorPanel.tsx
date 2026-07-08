@@ -58,6 +58,7 @@ export interface SceneBlueprint {
   sceneDescription: string;
   directorCommentary: string;
   clips: ClipBlueprint[];
+  referenceImageUrl?: string; // Reference image / first frame for this block
 }
 
 interface Message {
