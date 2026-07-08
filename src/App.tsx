@@ -63,7 +63,8 @@ import { useAuth } from "./contexts/AuthContext";
 import AssetLibraryPanel from "./components/AssetLibraryPanel";
 import PromptBuilderPanel from "./components/PromptBuilderPanel";
 import VideoHistoryPanel from "./components/VideoHistoryPanel";
-import AIDirectorPanel, { ClipBlueprint, SceneBlueprint } from "./components/AIDirectorPanel";
+import { ClipBlueprint, SceneBlueprint } from "./components/AIDirectorPanel";
+import ScriptPanel from "./components/ScriptPanel";
 import CameraOverlay from "./components/CameraOverlay";
 import { compileFinalPrompt, getAssetHandle, harvestAndSortRefImages } from "./utils";
 import { 
@@ -2261,12 +2262,12 @@ export default function App() {
               </div>
             </section>
 
-            {/* RIGHT SIDE PANEL (AI Script Director Panel) */}
-            <aside className="w-80 bg-surface-container-lowest border-l border-[#454933]/20 flex flex-col shrink-0 relative z-10">
-              <div className="p-3.5 border-b border-[#454933]/20 bg-[#121317]/50 flex justify-between items-center sticky top-0">
+            {/* RIGHT SIDE PANEL — Script / Guión */}
+            <aside className="w-80 bg-[#0e0f12] border-l border-white/8 flex flex-col shrink-0 relative z-10">
+              <div className="px-3.5 py-3 border-b border-white/8 bg-[#121317]/80 flex justify-between items-center flex-shrink-0">
                 <span className="text-xs font-black text-white font-display uppercase tracking-widest flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#d1f025]" />
-                  AI Director Storyboard
+                  <Film className="w-4 h-4 text-[#d1f025]" />
+                  Guión
                 </span>
                 {tasks.filter(t => t.status === "queued" || t.status === "generating").length > 0 && (
                   <span className="w-2.5 h-2.5 bg-[#d1f025] rounded-full animate-pulse shadow-[0_0_8px_#d1f025]" title="Renders activos" />
@@ -2274,19 +2275,17 @@ export default function App() {
               </div>
 
               <div className="flex-1 flex flex-col overflow-hidden">
-                <AIDirectorPanel
+                <ScriptPanel
                   characters={characters}
                   props={props}
                   locations={locations}
                   referenceFrames={referenceFrames}
-                  hasGeminiKey={hasGeminiKey}
                   onLoadClipConfig={handleLoadClipConfig}
                   onRenderClip={handleRenderClip}
                   onRenderScene={handleRenderScene}
                   onRenderSceneSequentially={handleRenderSceneSequentially}
                   isSequentiallyRendering={isSequentiallyRendering}
                   sequentialRenderProgress={sequentialRenderProgress}
-                  onAddReferenceFrame={handleAddReferenceFrame}
                 />
               </div>
             </aside>
