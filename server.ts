@@ -980,9 +980,10 @@ JSON Schema:
   const KEY_STATE_FILE = path.join(process.cwd(), 'key-states.json');
 
   // ── Request Queue ─────────────────────────────────────────────
-  // Space requests 1.5s apart per-key to avoid burst triggering rate limits
+  // Client now enforces 3-min spacing (see App.tsx GENERATION_SPACING_MS).
+  // Server keeps a minimal 2s spacing only as a safety net against accidental bursts.
   const keyLastRequestTime = new Map<string, number>();
-  const REQUEST_SPACING_MS = 1500; // 1.5s between requests to same key
+  const REQUEST_SPACING_MS = 2000; // 2s minimum safety net (real spacing is 3min on client)
 
   const waitForKeySpacing = async (keyString: string) => {
     const last = keyLastRequestTime.get(keyString) || 0;

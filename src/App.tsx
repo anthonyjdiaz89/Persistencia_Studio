@@ -390,6 +390,11 @@ export default function App() {
   const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const [playingVideoPoster, setPlayingVideoPoster] = useState<string | null>(null);
   const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(null);
+
+  // Generation queue — 3-minute spacing to never hit rate limit
+  const GENERATION_SPACING_MS = 3 * 60 * 1000; // 3 min between requests (4 videos/15min safely under 5 limit)
+  const lastGenerationTime = useRef<number>(0);
+  const [queueCountdown, setQueueCountdown] = useState<number>(0); // seconds remaining before next send
   
   // Settings copy & Frame Extraction states
   const [activeReplayTask, setActiveReplayTask] = useState<VideoTask | null>(null);
@@ -1071,22 +1076,26 @@ export default function App() {
     setErrorNotification(null);
 
     try {
-      // Add small delay between requests to avoid immediate rate limit hits (request spacing)
-      if (tasks.length > 0) {
-        let lastTaskTime = tasks[0]?.created_at || 0;
-        
-        // Fix: Detect if timestamp is in milliseconds (too large) and convert to seconds
-        if (lastTaskTime > 99999999999) {
-          lastTaskTime = Math.floor(lastTaskTime / 1000);
-        }
-        
-        const timeSinceLastMs = Date.now() - (lastTaskTime * 1000);
-        
-        // Only sleep if the time makes sense (positive and less than 2 seconds)
-        if (timeSinceLastMs >= 0 && timeSinceLastMs < 2000) {
-          await sleep(2000 - timeSinceLastMs);
-        }
+      // ── 3-minute spacing: max 4 videos per 15-min window, never hit rate limit ──
+      const now = Date.now();
+      const elapsed = now - lastGenerationTime.current;
+      const waitMs = Math.max(0, GENERATION_SPACING_MS - elapsed);
+
+      if (waitMs > 0) {
+        // Show live countdown
+        let remaining = Math.ceil(waitMs / 1000);
+        setQueueCountdown(remaining);
+        const countdownInterval = setInterval(() => {
+          remaining--;
+          setQueueCountdown(remaining);
+          if (remaining <= 0) clearInterval(countdownInterval);
+        }, 1000);
+        await sleep(waitMs);
+        clearInterval(countdownInterval);
+        setQueueCountdown(0);
       }
+
+      lastGenerationTime.current = Date.now();
 
       const success = await executeGenerationWithRetry(input, model, sceneTitle, clipNumber, 0);
 
@@ -1770,6 +1779,24 @@ export default function App() {
             {/* CENTER STAGE CONTAINER (Video Canvas & Prompt Composer) */}
             <section className="flex-1 flex flex-col min-w-0 bg-[#121317] border-r border-[#454933]/20 relative">
               {/* Notification Banners */}
+
+              {/* Queue countdown — 3-min spacing to stay under rate limit */}
+              {queueCountdown > 0 && (
+                <div className="mx-4 mt-4 bg-[#d1f025]/10 border border-[#d1f025]/30 text-[#d1f025] rounded-xl p-3 flex items-center justify-between animate-fade-in z-20">
+                  <div className="flex gap-3 items-center">
+                    <div className="w-8 h-8 rounded-full border-2 border-[#d1f025]/40 border-t-[#d1f025] animate-spin flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-black tracking-wide">ENVIANDO EN {Math.floor(queueCountdown / 60)}:{String(queueCountdown % 60).padStart(2, '0')}</p>
+                      <p className="text-[10px] text-[#d1f025]/60 mt-0.5">Espaciado 3 min · máx 4 videos/15min · sin bloqueos</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-black font-mono">{Math.floor(queueCountdown / 60)}:{String(queueCountdown % 60).padStart(2, '0')}</div>
+                    <div className="text-[9px] text-[#d1f025]/50">MIN:SEG</div>
+                  </div>
+                </div>
+              )}
+
               {errorNotification && (
                 <div className="mx-4 mt-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl p-3 flex items-start justify-between animate-fade-in z-20" id="error-banner">
                   <div className="flex gap-2">
