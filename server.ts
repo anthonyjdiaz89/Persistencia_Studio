@@ -856,7 +856,7 @@ JSON Schema:
           rateLimitResetTime: 0,
           isAvailable: true,
           currentUsage: 0,
-          limit: 999,  // Unlimited plan
+          limit: 5,  // Seedance 2: 5 per 15-min window (all plans including Unlimited)
           dailyVideosGenerated: 0,
           dailyResetTime: Date.now() + (15 * 60 * 1000)  // Reset in 15 min (API window)
         });
