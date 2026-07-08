@@ -979,6 +979,43 @@ JSON Schema:
   // Persistent key state file — survives server restarts
   const KEY_STATE_FILE = path.join(process.cwd(), 'key-states.json');
 
+  // ── Request Queue ─────────────────────────────────────────────
+  // Space requests 1.5s apart per-key to avoid burst triggering rate limits
+  const keyLastRequestTime = new Map<string, number>();
+  const REQUEST_SPACING_MS = 1500; // 1.5s between requests to same key
+
+  const waitForKeySpacing = async (keyString: string) => {
+    const last = keyLastRequestTime.get(keyString) || 0;
+    const elapsed = Date.now() - last;
+    if (elapsed < REQUEST_SPACING_MS) {
+      const wait = REQUEST_SPACING_MS - elapsed;
+      console.log(`[Queue] Spacing request to key ...${keyString.slice(-6)} — waiting ${wait}ms`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+    keyLastRequestTime.set(keyString, Date.now());
+  };
+
+  // ── Exponential Backoff (transient 5xx only — NOT for 429) ────
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  const fetchWithTransientRetry = async (url: string, opts: RequestInit, maxRetries = 2): Promise<{ response: Response; data: any }> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const response = await fetch(url, opts);
+      const data = await response.json();
+      // Retry only on transient 5xx (not 429 — API penalizes retries during rate limit)
+      if (response.status >= 500 && response.status !== 529 && attempt < maxRetries) {
+        const backoff = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.warn(`[Backoff] HTTP ${response.status} transient error — retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await sleep(backoff);
+        continue;
+      }
+      return { response, data };
+    }
+    // Should never reach here, but TypeScript needs it
+    const response = await fetch(url, opts);
+    return { response, data: await response.json() };
+  };
+
   const saveKeyStates = () => {
     try {
       const state = apiKeys.map(k => ({
@@ -1487,14 +1524,17 @@ JSON Schema:
 
       const responseData = await response.json();
 
-      // Only mark as rate-limited if the API itself returns rate_limit info AND usage >= limit
+      // ── Monitor rate_limit from API response (proactive tracking) ──
       if (responseData.rate_limit) {
         const usage = responseData.rate_limit.current_usage || 0;
-        const limit = responseData.rate_limit.limit || 999;
-        const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 60;
+        const limit = responseData.rate_limit.limit || 5;
+        const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 0;
         updateKeyUsage(apiKey, usage, limit);
-        if (limit !== "unlimited" && usage >= limit) {
-          markKeyAsRateLimited(apiKey, Math.min(secondsUntilReset, 15 * 60));
+        console.log(`[Rate Monitor] ${apiKeys.find(k=>k.key===apiKey)?.alias}: ${usage}/${limit} used, resets in ${secondsUntilReset}s`);
+        // Proactive switch: if at limit, mark as rate-limited NOW before next request
+        if (typeof limit === 'number' && usage >= limit && secondsUntilReset > 0) {
+          markKeyAsRateLimited(apiKey, secondsUntilReset, responseData.rate_limit.reset_time);
+          console.log(`[Rate Monitor] ⚠️ Proactively blocking key — at limit ${usage}/${limit}`);
         }
       }
 
@@ -1571,7 +1611,7 @@ JSON Schema:
         return res.status(response.status).json(normalizeProviderError(responseData, response.status));
       }
 
-      // If successful, seed the task in our in-memory store so the UI can check webhook status as well
+      // If successful, update usage tracking and persist state
       const taskId = responseData.generation_id;
       if (taskId) {
         webhookTasksStore.set(taskId, {
@@ -1581,13 +1621,13 @@ JSON Schema:
           model: model || "seedance-2-0",
           data: null
         });
-        
-        // Increment daily counter for tracking
-        const usedKeyInfo = apiKeys.find(k => k.key === apiKey);
-        if (usedKeyInfo) {
-          usedKeyInfo.dailyVideosGenerated++;
-          console.log(`[Multi-Key System] 📹 ${usedKeyInfo.alias} generated video #${usedKeyInfo.dailyVideosGenerated} today (Task ID: ${taskId})`);
-        }
+      }
+      const usedKeyInfo = apiKeys.find(k => k.key === apiKey);
+      if (usedKeyInfo) {
+        usedKeyInfo.currentUsage = Math.min((usedKeyInfo.currentUsage || 0) + 1, usedKeyInfo.limit);
+        usedKeyInfo.dailyVideosGenerated++;
+        saveKeyStates();
+        console.log(`[Multi-Key System] 📹 ${usedKeyInfo.alias} uso=${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} | Task: ${taskId}`);
       }
 
       return res.json({
