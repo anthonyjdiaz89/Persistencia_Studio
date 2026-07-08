@@ -1043,14 +1043,13 @@ JSON Schema:
   };
 
   // Update key usage count from API response
-  const updateKeyUsage = (keyString: string, usage: number, limit: number = 5) => {
+  const updateKeyUsage = (keyString: string, usage: number, limit: number = 999) => {
     const keyInfo = apiKeys.find(k => k.key === keyString);
     if (keyInfo) {
       keyInfo.currentUsage = usage;
-      keyInfo.limit = limit;
-      if (usage >= limit) {
-        keyInfo.isAvailable = false;
-      }
+      // Only update limit if it's a real number limit (not unlimited plan)
+      if (limit < 999) keyInfo.limit = limit;
+      // Never mark as unavailable based on usage alone — let 429 responses do that
     }
   };
 
@@ -1488,10 +1487,10 @@ JSON Schema:
           }
         }
         
-        // Handle 429 rate limit errors - mark key as unavailable
-        if (response.status === 429 && responseData.details) {
-          const resetSeconds = responseData.details.seconds_until_reset || 600;
-          markKeyAsRateLimited(apiKey, resetSeconds);
+        // Handle 429 rate limit errors - mark key as unavailable (max 15 min - real API window)
+        if (response.status === 429) {
+          const resetSeconds = responseData.details?.seconds_until_reset || 900;
+          markKeyAsRateLimited(apiKey, Math.min(resetSeconds, 15 * 60)); // Never block more than 15 min
         }
         
         return res.status(response.status).json(normalizeProviderError(responseData, response.status));
