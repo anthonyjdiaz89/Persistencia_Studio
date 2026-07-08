@@ -55,8 +55,11 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  Trash2
+  Trash2,
+  LogOut,
+  User
 } from "lucide-react";
+import { useAuth } from "./contexts/AuthContext";
 import AssetLibraryPanel from "./components/AssetLibraryPanel";
 import PromptBuilderPanel from "./components/PromptBuilderPanel";
 import VideoHistoryPanel from "./components/VideoHistoryPanel";
@@ -280,6 +283,9 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
 };
 
 export default function App() {
+  // Auth
+  const { user, signOut } = useAuth();
+  
   // 1. Assets State (initially empty, loaded from Firebase)
   const [characters, setCharacters] = useState<CharacterAsset[]>([]);
   const [props, setProps] = useState<PropAsset[]>([]);
@@ -1682,12 +1688,22 @@ export default function App() {
             <span>Compartir</span>
           </button>
 
-          <div className="w-8 h-8 rounded-full bg-[#343539] border border-[#454933]/30 overflow-hidden cursor-pointer" onClick={handleShareApp}>
-            <img 
-              alt="Usuario Pro" 
-              className="w-full h-full object-cover" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDsXAHPli-T71TTb1v44-Gzgr311W2NuAWA1xFPTiZxkZ-TD4flZzX8yJEuJ9-E-beUFUAxQ3JmSt1h5JNDDMnG6yyfNEhEb2LLbNLGPNqfUd3KhQy_i9hEEWNy8qqbo1d3uB1oHJBwvWD1XlImQd4po3AZgbYtCi0CkOOyZU0rO7S47h2OskZMREAnJrvSIQRS7zAhtkC0XPlRf06ihwUjV1VlwPV4aMInm0doEEDoi3_yWujwW312LA"
-            />
+          {/* User Menu */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1e1f23] border border-[#454933]/30">
+              <User className="w-3.5 h-3.5 text-[#d1f025]" />
+              <span className="text-xs font-medium text-slate-300">
+                {user?.email || 'Usuario'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1e1f23] border border-[#454933]/30 hover:bg-[#343539] transition-all text-xs font-medium text-slate-300 cursor-pointer"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-3.5 h-3.5 text-red-400" />
+            </button>
           </div>
         </div>
       </header>

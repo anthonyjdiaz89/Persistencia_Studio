@@ -1,14 +1,13 @@
 /**
  * Supabase Database Client
- * Replaces Firebase for storing materials (characters, props, locations)
+ * Handles authentication and data storage for Persistencia Studio
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CharacterAsset, PropAsset, LocationAsset, ReferenceFrameAsset } from '../types';
 
 let supabaseClient: SupabaseClient | null = null;
-let currentUserId: string | null = null;
-let initPromise: Promise<{ supabase: SupabaseClient; userId: string }> | null = null;
+let initPromise: Promise<SupabaseClient> | null = null;
 
 export enum OperationType {
   CREATE = 'create',
@@ -26,20 +25,17 @@ export interface SupabaseErrorInfo {
 }
 
 /**
- * Initialize Supabase client (singleton pattern with Promise to prevent multiple instances)
+ * Get Supabase client instance (singleton pattern)
  */
-export async function initSupabase() {
-  // Return existing instance if already initialized
-  if (supabaseClient && currentUserId) {
-    return { supabase: supabaseClient, userId: currentUserId };
+export async function getSupabaseClient(): Promise<SupabaseClient> {
+  if (supabaseClient) {
+    return supabaseClient;
   }
 
-  // If initialization is in progress, wait for it
   if (initPromise) {
     return initPromise;
   }
 
-  // Start new initialization
   initPromise = (async () => {
     // Get Supabase config from server endpoint
     const res = await fetch('/api/supabase-config');
@@ -52,12 +48,13 @@ export async function initSupabase() {
       throw new Error('Supabase URL and ANON_KEY are required in .env');
     }
 
-    // Create Supabase client with options for self-hosted instances
+    // Create Supabase client with auth enabled
     supabaseClient = createClient(url, anonKey, {
       auth: {
-        persistSession: false, // No need for auth sessions
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
       },
       db: {
         schema: 'public',
@@ -69,32 +66,59 @@ export async function initSupabase() {
       },
     });
 
-    // Generate or retrieve local user ID
-    let localUid = localStorage.getItem('seedance_user_id');
-    if (!localUid) {
-      localUid = `user-${Math.random().toString(36).substring(2, 15)}`;
-      localStorage.setItem('seedance_user_id', localUid);
-    }
-
-    currentUserId = localUid;
-
-    return { supabase: supabaseClient, userId: currentUserId };
+    return supabaseClient;
   })();
 
   return initPromise;
 }
 
 /**
+ * Initialize Supabase (legacy function, kept for compatibility)
+ */
+export async function initSupabase() {
+  const supabase = await getSupabaseClient();
+  const userId = await getUserId();
+  return { supabase, userId };
+}
+
+/**
+ * Get current authenticated user ID
+ */
+export async function getUserId(): Promise<string> {
+  const supabase = await getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    // Fallback to local ID for backward compatibility
+    let localUid = localStorage.getItem('seedance_user_id');
+    if (!localUid) {
+      localUid = `local-${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem('seedance_user_id', localUid);
+    }
+    return localUid;
+  }
+  
+  return user.id;
+}
+
+/**
  * Error handler
  */
-function handleSupabaseError(error: unknown, operationType: OperationType, table: string): never {
+async function handleSupabaseError(error: unknown, operationType: OperationType, table: string): Promise<never> {
   const errMessage = error instanceof Error ? error.message : String(error);
+  
+  let userId: string | null = null;
+  try {
+    userId = await getUserId();
+  } catch {
+    userId = null;
+  }
   
   const errInfo: SupabaseErrorInfo = {
     error: errMessage,
     operationType,
     table,
-    userId: currentUserId,
+    userId,
   };
   
   console.error('Supabase Error:', errInfo);
