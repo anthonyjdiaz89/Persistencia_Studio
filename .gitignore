@@ -7,6 +7,11 @@ coverage/
 .env*
 !.env.example
 
+# Runtime state files (generated at runtime, not for version control)
+key-states.json
+server_out.txt
+server_err.txt
+
 # Test files
 test-*.json
 tmp-*.json
