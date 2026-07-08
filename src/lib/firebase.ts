@@ -571,12 +571,18 @@ export async function saveTaskDoc(userId: string, task: VideoTask) {
 }
 
 export async function deleteTaskDoc(userId: string, taskId: string) {
+  // Guard: skip silently if Firestore is not initialized (app uses Supabase)
+  if (!dbInstance) {
+    console.warn('[Firebase] deleteTaskDoc: Firestore not initialized, skipping legacy cleanup');
+    return;
+  }
   const path = `tasks/${userId}_${taskId}`;
   try {
     const docRef = doc(collection(dbInstance, "tasks"), `${userId}_${taskId}`);
     await deleteDoc(docRef);
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, path);
+    // Log but don't throw — Firestore cleanup is non-critical
+    console.warn('[Firebase] deleteTaskDoc failed (non-critical):', err);
   }
 }
 

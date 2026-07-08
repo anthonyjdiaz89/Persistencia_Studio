@@ -1267,9 +1267,13 @@ export default function App() {
         headers
       });
 
-      // 2. Delete from Firestore if authenticated
+      // 2. Delete from Firestore if authenticated (non-critical legacy cleanup — never show error to user)
       if (userId) {
-        await deleteTaskDoc(userId, taskId);
+        try {
+          await deleteTaskDoc(userId, taskId);
+        } catch (firestoreErr) {
+          console.warn('[Delete] Firestore cleanup failed (non-critical):', firestoreErr);
+        }
       }
 
       setSuccessToast("Video eliminado con éxito.");
