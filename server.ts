@@ -1583,18 +1583,18 @@ JSON Schema:
           const rawMsg = JSON.stringify(responseData).toLowerCase();
           const isDailyLimit = rawMsg.includes("daily limit") || rawMsg.includes("exceeded the daily");
           
-          // Priority: 1) API body seconds_until_reset (exact reset time known)
-          //           2) API body reset_time string (exact time known)
-          //           3) 15 min retry — do NOT use x-rate-limit-window (it's the WINDOW SIZE, not wait time)
-          //              We don't know where in the window we are, so retry in 15 min and let API decide
-          const resetSeconds = d.seconds_until_reset || 900; // 15 min retry if no exact time
+          // Usar el tiempo que viene en la respuesta de la API:
+          //   1) body.seconds_until_reset  -> tiempo exacto (ej: 429 con 90s)
+          //   2) header x-rate-limit-window -> ventana que dice la API (ej: 3600s)
+          //   3) 900s fallback (15 min)
+          const resetSeconds = d.seconds_until_reset || rateLimitWindow || 900;
           const resetTimeStr = d.reset_time || undefined;
           const usage = d.current_usage ?? 5;
           const limit = (typeof d.limit === 'number') ? d.limit : 5;
           const hitKeyInfo = apiKeys.find(k => k.key === apiKey);
           if (hitKeyInfo) { hitKeyInfo.currentUsage = usage; hitKeyInfo.limit = limit; }
           markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
-          const waitSource = d.seconds_until_reset ? 'dato exacto del API' : 'reintento en 15min (sin reset_time en respuesta)';
+          const waitSource = d.seconds_until_reset ? `exacto: ${resetSeconds}s` : (rateLimitWindow ? `x-rate-limit-window: ${rateLimitWindow}s` : 'fallback 900s');
           console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada ~${Math.ceil(resetSeconds/60)}min | ${isDailyLimit ? 'daily limit' : 'rate limit'} | ${waitSource}`);
 
           // Auto-retry ONLY if next key is confirmed available (not rate-limited)
