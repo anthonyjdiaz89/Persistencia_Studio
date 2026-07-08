@@ -644,9 +644,7 @@ export function compileFinalPrompt(
     finalPrompt = `${continuityInstruction} ${finalPrompt}`;
   }
 
-  console.log('[FINAL COMPILED PROMPT]');
-  console.log(finalPrompt);
-  console.log('---');
+
 
   return {
     compiled: finalPrompt,

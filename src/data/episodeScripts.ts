@@ -15,7 +15,7 @@ function cam(
   return { style, pan, tilt, zoom, roll: "none", speed, timeOfDay, motionCurve: "ease-in-out" };
 }
 function clip(n: number, title: string, prompt: string, camSettings?: Partial<ClipBlueprint["cameraSettings"]>): ClipBlueprint {
-  return { clipNumber: n, title, prompt, cameraSettings: { ...cam(), ...camSettings }, duration: 10, generate_audio: true, consistencyExplanation: "" };
+  return { clipNumber: n, title, prompt, cameraSettings: { ...cam(), ...camSettings }, duration: 10, generate_audio: false, consistencyExplanation: "" };
 }
 
 /* ════════════════════════════════════════════════════════════════

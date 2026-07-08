@@ -227,6 +227,11 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
     return lines.join("\n");
   }
 
+  const blockedByAudioSafety =
+    fullTextForSafetyCheck.includes("output audio may contain sensitive") ||
+    fullTextForSafetyCheck.includes("audio may contain sensitive") ||
+    fullTextForSafetyCheck.includes("sensitive information");
+
   const blockedBySafety =
     fullTextForSafetyCheck.includes("potentially dangerous content") ||
     fullTextForSafetyCheck.includes("dangerous content") ||
@@ -258,6 +263,15 @@ const extractApiErrorMessage = (data: any, fallback: string): string => {
       "Acciones: reintenta en 2-5 minutos, reduce duracion/resolucion, o cambia de modelo/API Key."
     ].filter(Boolean);
     return lines.join("\n");
+  }
+
+  if (blockedByAudioSafety) {
+    return [
+      "⚠️ El audio fue bloqueado por el filtro de seguridad del proveedor.",
+      "Causa: el prompt describe di\u00e1logos, canciones o voces, y el modelo detect\u00f3 posible contenido sensible en el audio generado.",
+      "Soluc\u00f3n: desactiva la opci\u00f3n 'Audio' en el clip y vuelve a intentarlo.",
+      "Tip: el audio ambiente (olas, brisa, pasos) generalmente no causa este error; el problema ocurre cuando hay voces o m\u00fasica con letra."
+    ].join("\n");
   }
 
   if (quotaExceeded) {
