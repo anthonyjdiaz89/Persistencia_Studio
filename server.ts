@@ -979,32 +979,31 @@ JSON Schema:
     console.log('');
   }, 5 * 60 * 1000); // Every 5 minutes
 
-  // Select best available API key (round-robin with availability check)
+  // Select best available API key (round-robin, always tries — never blocks locally)
+  // The API is the source of truth for rate limits, not our internal timer.
   let lastUsedKeyIndex = -1;
   const selectBestAvailableApiKey = (ignoreRateLimit = false): ApiKeyInfo | null => {
     if (apiKeys.length === 0) return null;
     
     const now = Date.now();
     
-    // Reset availability for keys whose rate limit window has passed
+    // Auto-reset any key whose stored reset time has already passed
     apiKeys.forEach(keyInfo => {
-      if (!keyInfo.isAvailable && now >= keyInfo.rateLimitResetTime) {
+      if (!keyInfo.isAvailable && keyInfo.rateLimitResetTime > 0 && now >= keyInfo.rateLimitResetTime) {
         keyInfo.isAvailable = true;
         keyInfo.currentUsage = 0;
-        const currentTimeCOT = new Date(now).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-        console.log(`[Multi-Key System] 🟢 ${keyInfo.alias} rate limit RESET - now available (${currentTimeCOT} COT)`);
+        keyInfo.rateLimitResetTime = 0;
+        const t = new Date(now).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
+        console.log(`[Multi-Key System] 🟢 ${keyInfo.alias} timer expired — marked available again (${t} COT)`);
       }
     });
     
-    // For history/status endpoints that don't count against rate limits
-    // ALWAYS return first key, even if rate-limited
+    // For history/status endpoints, always use first key
     if (ignoreRateLimit && apiKeys.length > 0) {
-      const firstKey = apiKeys[0];
-      console.log(`[Multi-Key System] Selected ${firstKey.alias} for unlimited endpoint (ignoring rate limit, available: ${firstKey.isAvailable})`);
-      return firstKey;
+      return apiKeys[0];
     }
     
-    // Find next available key (round-robin)
+    // Prefer keys marked available (round-robin)
     for (let i = 0; i < apiKeys.length; i++) {
       lastUsedKeyIndex = (lastUsedKeyIndex + 1) % apiKeys.length;
       const candidate = apiKeys[lastUsedKeyIndex];
@@ -1014,14 +1013,18 @@ JSON Schema:
       }
     }
     
-    // All keys are rate-limited - find the one that resets soonest
+    // All keys show as rate-limited locally — but we don't know the real API state.
+    // Return the key whose stored reset is soonest so we can try it; if the API 
+    // is still blocking it will return 429 with real wait time.
     const soonestReset = apiKeys.reduce((earliest, current) => 
       current.rateLimitResetTime < earliest.rateLimitResetTime ? current : earliest
     );
-    
-    const waitSeconds = Math.ceil((soonestReset.rateLimitResetTime - now) / 1000);
-    console.log(`[Multi-Key System] All keys rate-limited. Soonest reset: ${soonestReset.alias} in ${waitSeconds}s`);
-    return null;
+    const waitSec = Math.max(0, Math.ceil((soonestReset.rateLimitResetTime - now) / 1000));
+    console.log(`[Multi-Key System] All keys locally rate-limited. Trying ${soonestReset.alias} anyway (reset in ~${Math.ceil(waitSec/60)} min according to local state).`);
+    // Mark it as available so the request goes through; the API will confirm or reject
+    soonestReset.isAvailable = true;
+    soonestReset.currentUsage = 0;
+    return soonestReset;
   };
 
   // Mark a key as rate-limited
@@ -1054,30 +1057,20 @@ JSON Schema:
   };
 
   // Helper to resolve the Seedance/VideoGenAPI API Key (from request headers or load balancer)
-  // Returns { key: string } or { allKeysExhausted: true, waitSeconds: number, resetTime: string }
+  // The API is the source of truth — we always try, never block locally based on timers.
   const getApiKey = (req: express.Request, ignoreRateLimit = false): string | { allKeysExhausted: true; waitSeconds: number; resetTime: string } | null => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 7) {
       return authHeader.substring(7);
     }
     
-    // Use load balancing system
+    // Use load balancing system — always returns a key (never null when keys exist)
     const selectedKey = selectBestAvailableApiKey(ignoreRateLimit);
     if (selectedKey) {
       return selectedKey.key;
     }
     
-    // All keys exhausted - return wait info
-    if (apiKeys.length > 0 && !ignoreRateLimit) {
-      const now = Date.now();
-      const soonestReset = apiKeys.reduce((earliest, current) => 
-        current.rateLimitResetTime < earliest.rateLimitResetTime ? current : earliest
-      );
-      const waitSeconds = Math.max(1, Math.ceil((soonestReset.rateLimitResetTime - now) / 1000));
-      const resetTime = new Date(soonestReset.rateLimitResetTime).toISOString();
-      return { allKeysExhausted: true, waitSeconds, resetTime };
-    }
-    
+    // No keys configured at all
     return null;
   };
 
