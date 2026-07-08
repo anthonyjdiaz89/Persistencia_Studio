@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { API_BASE_URL } from "../config";
 import { 
   CharacterAsset, 
   PropAsset, 
@@ -234,7 +235,7 @@ export default function AIDirectorPanel({
     }, 1500);
 
     try {
-      const response = await fetch("/api/ai-director/compose", {
+      const response = await fetch(`${API_BASE_URL}/api/ai-director/compose`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -310,7 +311,7 @@ export default function AIDirectorPanel({
     }, 1500);
 
     try {
-      const response = await fetch("/api/ai-director/compose", {
+      const response = await fetch(`${API_BASE_URL}/api/ai-director/compose`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

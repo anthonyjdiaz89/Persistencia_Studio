@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 interface UserInfo {
   email?: string;
@@ -70,7 +71,7 @@ export function APIDebuggerPanel() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/seedance/generations/${genId}`);
+      const response = await fetch(`${API_BASE_URL}/api/seedance/generations/${genId}`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       }

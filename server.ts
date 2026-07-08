@@ -14,7 +14,8 @@ const webhookTasksStore = new Map<string, any>();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Use PORT from environment (Cloud Run, Heroku, etc.) or default to 3000 for local dev
+  const PORT = parseInt(process.env.PORT || "3000", 10);
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -800,6 +801,8 @@ JSON Schema:
     isAvailable: boolean;
     currentUsage: number;
     limit: number;
+    dailyVideosGenerated: number;  // Track daily usage
+    dailyResetTime: number;        // When daily count resets (24h from first use)
   }
 
   const apiKeys: ApiKeyInfo[] = [];
@@ -818,7 +821,9 @@ JSON Schema:
           rateLimitResetTime: 0,
           isAvailable: true,
           currentUsage: 0,
-          limit: 5
+          limit: 5,
+          dailyVideosGenerated: 0,
+          dailyResetTime: Date.now() + (24 * 60 * 60 * 1000)  // Reset in 24h
         });
       }
     }
@@ -833,7 +838,9 @@ JSON Schema:
           rateLimitResetTime: 0,
           isAvailable: true,
           currentUsage: 0,
-          limit: 5
+          limit: 5,
+          dailyVideosGenerated: 0,
+          dailyResetTime: Date.now() + (24 * 60 * 60 * 1000)
         });
       }
     }
@@ -848,12 +855,39 @@ JSON Schema:
     console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}... (available: ${keyInfo.isAvailable})`);
   });
 
+  // Reset daily counters when 24h window expires
+  setInterval(() => {
+    const now = Date.now();
+    apiKeys.forEach((keyInfo) => {
+      if (now >= keyInfo.dailyResetTime) {
+        console.log(`[Multi-Key System] 🔄 ${keyInfo.alias} daily counter reset: ${keyInfo.dailyVideosGenerated} videos generated today`);
+        keyInfo.dailyVideosGenerated = 0;
+        keyInfo.dailyResetTime = now + (24 * 60 * 60 * 1000);
+      }
+    });
+  }, 60 * 1000); // Check every minute
+
   // Log key status every 5 minutes to track distribution and resets
   setInterval(() => {
     console.log(`\n[Multi-Key System] 📊 Status Report (${new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' })} COT):`);
+    
+    // Calculate total capacity
+    const totalGenerated = apiKeys.reduce((sum, k) => sum + k.dailyVideosGenerated, 0);
+    const estimatedDailyLimit = apiKeys.length * 10; // Conservative estimate: 10 videos/key/day
+    const capacityPercent = ((estimatedDailyLimit - totalGenerated) / estimatedDailyLimit) * 100;
+    
+    console.log(`  Total videos today: ${totalGenerated} | Est. capacity: ${estimatedDailyLimit} | Remaining: ${Math.max(0, estimatedDailyLimit - totalGenerated)} (${capacityPercent.toFixed(1)}%)`);
+    
+    if (capacityPercent < 30) {
+      console.warn(`  ⚠️ ALERTA: Capacidad diaria < 30%! Considera agregar más API keys.`);
+    }
+    
+    console.log(`  Individual keys:`);
     apiKeys.forEach((keyInfo, idx) => {
       const status = keyInfo.isAvailable ? '🟢 AVAILABLE' : '🔴 RATE-LIMITED';
       const usage = `${keyInfo.currentUsage}/${keyInfo.limit}`;
+      const dailyUsage = `${keyInfo.dailyVideosGenerated} videos today`;
+      
       let resetInfo = '';
       if (!keyInfo.isAvailable) {
         const now = Date.now();
@@ -861,7 +895,8 @@ JSON Schema:
         const waitMinutes = Math.ceil(waitSeconds / 60);
         resetInfo = ` (resets in ${waitMinutes} min)`;
       }
-      console.log(`  [${idx + 1}] ${keyInfo.alias}: ${status} | Usage: ${usage}${resetInfo}`);
+      
+      console.log(`    [${idx + 1}] ${keyInfo.alias}: ${status} | Current: ${usage}${resetInfo} | Daily: ${dailyUsage}`);
     });
     console.log('');
   }, 5 * 60 * 1000); // Every 5 minutes
@@ -1475,6 +1510,13 @@ JSON Schema:
           model: model || "seedance-2-0",
           data: null
         });
+        
+        // Increment daily counter for tracking
+        const usedKeyInfo = apiKeys.find(k => k.key === apiKey);
+        if (usedKeyInfo) {
+          usedKeyInfo.dailyVideosGenerated++;
+          console.log(`[Multi-Key System] 📹 ${usedKeyInfo.alias} generated video #${usedKeyInfo.dailyVideosGenerated} today (Task ID: ${taskId})`);
+        }
       }
 
       return res.json({
@@ -1740,7 +1782,9 @@ JSON Schema:
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔑 API Keys loaded: ${apiKeys.length}`);
   });
 }
 

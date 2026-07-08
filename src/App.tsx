@@ -19,6 +19,7 @@ import {
   DEFAULT_PROPS, 
   DEFAULT_LOCATIONS 
 } from "./defaultData";
+import { API_BASE_URL } from "./config";
 import { 
   Film, 
   Sparkles, 
@@ -392,7 +393,7 @@ export default function App() {
       if (activeKey) {
         headers["Authorization"] = `Bearer ${activeKey}`;
       }
-      const res = await fetch("/api/seedance/history", { headers });
+      const res = await fetch(`${API_BASE_URL}/api/seedance/history`, { headers });
       if (!res.ok) {
         throw new Error(`Failed to fetch history from API: ${res.status}`);
       }
@@ -502,7 +503,7 @@ export default function App() {
   useEffect(() => {
     const checkConfig = async () => {
       try {
-        const res = await fetch("/api/config");
+        const res = await fetch(`${API_BASE_URL}/api/config`);
         if (res.ok) {
           const data = await res.json();
           setHasEnvApiKey(data.hasApiKey);
@@ -547,7 +548,7 @@ export default function App() {
   // Fetch multi-key status
   const fetchMultiKeyStatus = async () => {
     try {
-      const res = await fetch("/api/keys/status");
+      const res = await fetch(`${API_BASE_URL}/api/keys/status`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -658,7 +659,7 @@ export default function App() {
 
       setIsPollingMap(prev => ({ ...prev, [taskId]: true }));
 
-      const res = await fetch(`/api/seedance/tasks/${taskId}`, { headers });
+      const res = await fetch(`${API_BASE_URL}/api/seedance/tasks/${taskId}`, { headers });
       if (!res.ok) {
         if (res.status === 404 || res.status === 401) {
           if (activeIntervals.current[taskId]) {
@@ -936,7 +937,7 @@ export default function App() {
         controller.abort();
       }, fetchTimeout);
       
-      const res = await fetch("/api/seedance/generations", {
+      const res = await fetch(`${API_BASE_URL}/api/seedance/generations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -964,11 +965,21 @@ export default function App() {
 
       if (res.status === 429 && retryCount < maxRetries) {
         const waitSeconds = data.details?.seconds_until_reset || (2 ** retryCount) * 5;
-        const waitMs = Math.min(waitSeconds * 1000, 600000); // Cap at 10 minutes
-        console.log(`[Rate Limit] Retry ${retryCount + 1}/${maxRetries} after ${Math.ceil(waitMs / 1000)}s`);
-        setErrorNotification(`Rate limit alcanzado. Reintentando automáticamente en ${Math.ceil(waitMs / 1000)}s...`);
-        await sleep(waitMs);
-        return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
+        
+        // Only auto-retry if wait time is reasonable (<= 60 seconds)
+        if (waitSeconds <= 60) {
+          const waitMs = waitSeconds * 1000;
+          console.log(`[Rate Limit] Auto-retry ${retryCount + 1}/${maxRetries} after ${waitSeconds}s`);
+          setErrorNotification(`Rate limit alcanzado. Reintentando automáticamente en ${waitSeconds}s...`);
+          await sleep(waitMs);
+          return executeGenerationWithRetry(input, model, sceneTitle, clipNumber, retryCount + 1);
+        } else {
+          // Wait time too long - don't auto-retry, just show error
+          console.log(`[Rate Limit] Wait time too long (${waitSeconds}s), not auto-retrying`);
+          const errorMsg = extractApiErrorMessage(data, `Rate limit alcanzado. Intenta nuevamente en ${Math.ceil(waitSeconds / 60)} minutos.`);
+          setErrorNotification(errorMsg);
+          return false;
+        }
       }
 
       if (!res.ok) {
@@ -1230,7 +1241,7 @@ export default function App() {
         headers["Authorization"] = `Bearer ${apiKey}`;
       }
       
-      await fetch(`/api/seedance/tasks/${taskId}`, {
+      await fetch(`${API_BASE_URL}/api/seedance/tasks/${taskId}`, {
         method: "DELETE",
         headers
       });
@@ -1477,7 +1488,7 @@ export default function App() {
           status: `Enviando render de Shot ${clip.clipNumber} a la API de Seedance...`
         });
 
-        const res = await fetch("/api/seedance/generations", {
+        const res = await fetch(`${API_BASE_URL}/api/seedance/generations`, {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -1529,7 +1540,7 @@ export default function App() {
         while (!isDone) {
           await new Promise(resolve => setTimeout(resolve, 8000));
           try {
-            const statusRes = await fetch(`/api/seedance/tasks/${taskId}`, { headers });
+            const statusRes = await fetch(`${API_BASE_URL}/api/seedance/tasks/${taskId}`, { headers });
             if (statusRes.ok) {
               const statusData = await statusRes.json();
               if (statusData.status === "completed" || statusData.status === "failed") {

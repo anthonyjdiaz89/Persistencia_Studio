@@ -17,6 +17,7 @@ import {
 import { getAuth, signInAnonymously } from "firebase/auth";
 import { CharacterAsset, PropAsset, LocationAsset, VideoTask, ReferenceFrameAsset } from "../types";
 import { DEFAULT_CHARACTERS, DEFAULT_PROPS, DEFAULT_LOCATIONS } from "../defaultData";
+import { API_BASE_URL } from "../config";
 
 // Supabase Storage Utilities
 let supabaseConfig: { url: string; anonKey: string } | null = null;
@@ -24,7 +25,7 @@ let supabaseConfig: { url: string; anonKey: string } | null = null;
 export async function getSupabaseConfig() {
   if (supabaseConfig) return supabaseConfig;
   
-  const res = await fetch("/api/supabase-config");
+  const res = await fetch(`${API_BASE_URL}/api/supabase-config`);
   if (!res.ok) {
     throw new Error("Failed to load Supabase configuration from server.");
   }
@@ -184,7 +185,7 @@ export async function initFirebase() {
     return { db: dbInstance, auth: authInstance, user: currentUser };
   }
 
-  const res = await fetch("/api/firebase-config");
+  const res = await fetch(`${API_BASE_URL}/api/firebase-config`);
   if (!res.ok) {
     throw new Error("Failed to load Firebase configuration from server.");
   }
