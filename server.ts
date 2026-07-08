@@ -1016,9 +1016,34 @@ JSON Schema:
     return QUOTA_BODY_PHRASES.some(phrase => body.includes(phrase));
   };
 
+  // ── Outbound proxy support ────────────────────────────────────
+  // Set OUTBOUND_PROXY_URL in .env to route all videogenapi.com requests through a proxy
+  // Useful when the server's IP is rate-limited by the upstream API.
+  // Example: OUTBOUND_PROXY_URL=http://user:pass@proxy.example.com:8080
+  //          OUTBOUND_PROXY_URL=socks5://user:pass@proxy.example.com:1080
+  const OUTBOUND_PROXY_URL = process.env.OUTBOUND_PROXY_URL;
+  if (OUTBOUND_PROXY_URL) {
+    console.log(`[Proxy] Outbound proxy configured: ${OUTBOUND_PROXY_URL.replace(/:\/\/.*@/, '://***@')}`);
+  }
+
+  // Fetch wrapper that uses proxy if configured
+  const proxiedFetch = async (url: string, opts: RequestInit): Promise<Response> => {
+    if (!OUTBOUND_PROXY_URL) return fetch(url, opts);
+    try {
+      // Dynamically import proxy agent (node-fetch compatible)
+      const { HttpsProxyAgent } = await import('https-proxy-agent');
+      const agent = new HttpsProxyAgent(OUTBOUND_PROXY_URL);
+      return fetch(url, { ...opts, ...(agent as any) });
+    } catch {
+      // https-proxy-agent not installed — fall back to direct fetch
+      console.warn('[Proxy] https-proxy-agent not available, using direct fetch');
+      return fetch(url, opts);
+    }
+  };
+
   const fetchWithTransientRetry = async (url: string, opts: RequestInit, maxRetries = 2): Promise<{ response: Response; data: any; rateLimitWindow?: number }> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url, opts);
+      const response = await proxiedFetch(url, opts);
       const data = await response.json();
       // Extract x-rate-limit-window header if present (tells us the real window)
       const rateLimitWindow = response.headers.get('x-rate-limit-window')
