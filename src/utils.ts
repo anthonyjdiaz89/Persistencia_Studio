@@ -45,8 +45,8 @@ const CHARACTER_HEIGHTS: Record<string, string> = {
 
 // Location and prop scale proportions for the animated series
 const LOCATION_PROPORTIONS: Record<string, string> = {
-  "isla": "small tropical island approx 50m diameter, white sand beach surrounds turquoise water, tall palm trees 8-10m height, wooden dock 15m long extends into water, rustic wooden cabin with 2m tall door (taller than Tomás), dark volcanic rocks scattered on beach, crystal clear shallow water fades to deep blue",
-  "island": "small tropical island approx 50m diameter, white sand beach surrounds turquoise water, tall palm trees 8-10m height, wooden dock 15m long extends into water, rustic wooden cabin with 2m tall door (taller than Tomás), dark volcanic rocks scattered on beach, crystal clear shallow water fades to deep blue",
+  "isla": "UNA SOLA isla tropical pequeña de aprox 50m diámetro, playa de arena blanca rodea agua turquesa, palmeras altas 8-10m altura, muelle de madera 15m largo se extiende al agua, cabaña rústica de madera con puerta de 2m altura (más alta que Tomás), rocas volcánicas oscuras dispersas en playa, agua cristalina poco profunda se desvanece a azul profundo. ⚠️ IMPORTANTE: Si la imagen muestra múltiples vistas (aérea, frontal, lateral, detalle), son TODAS de la MISMA isla vista desde diferentes ángulos, NO son múltiples islas",
+  "island": "ONE SINGLE small tropical island approx 50m diameter, white sand beach surrounds turquoise water, tall palm trees 8-10m height, wooden dock 15m long extends into water, rustic wooden cabin with 2m tall door (taller than Tomás), dark volcanic rocks scattered on beach, crystal clear shallow water fades to deep blue. ⚠️ IMPORTANT: If image shows multiple views (aerial, frontal, lateral, detail), they are ALL of the SAME island from different angles, NOT multiple islands",
   "casa": "wooden cabin, main door is 2 meters tall (taller than Tomás)",
   "house": "wooden cabin, main door is 2 meters tall (taller than Tomás)"
 };
@@ -480,7 +480,11 @@ export function compileFinalPrompt(
       
       if (hasImage && imageIndexForThisMention > 0) {
         // HAS IMAGE: Minimal prompt + proportions only
-        refToken = ` [Image${imageIndexForThisMention}] ⚠️ USAR ELEMENTOS DE LA IMAGEN`;
+        // Special instruction for multi-view location images
+        const multiViewNote = normalized === 'isla' || normalized === 'island'
+          ? " [📷 IMAGEN MULTI-VISTA: La imagen muestra 4 VISTAS DIFERENTES (aérea, frontal, lateral, detalle) de la MISMA ubicación. Usar estas vistas como REFERENCIA de UNA SOLA locación, NO crear múltiples versiones. Los paneles son planos de referencia de la misma isla desde diferentes ángulos]"
+          : "";
+        refToken = ` [Image${imageIndexForThisMention}] ⚠️ USAR ELEMENTOS DE LA IMAGEN${multiViewNote}`;
         descSuffix = proportionInfo ? ` (${proportionInfo})` : "";
       } else {
         // NO IMAGE: Use full description
@@ -581,8 +585,8 @@ export function compileFinalPrompt(
   }
   
   const noExtraElementsInstruction = isSpanish
-    ? "[🚫 REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] "
-    : "[🚫 STRICT GLOBAL RULE: DO NOT add characters, objects, animals or additional elements that are not EXPLICITLY mentioned in the prompt. ONLY render exactly what is requested. DO NOT invent extras, background people, additional props, tools, utensils, or decorative elements. If it's not textually mentioned in the prompt or as [ImageX], it should NOT appear in the scene. FORBIDDEN to add context or environment elements not requested.] ";
+    ? "[🚫 REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados. 🏝️ LOCACIONES: NO duplicar locaciones. Si se menciona 'la isla', es UNA SOLA isla, NO múltiples islas o casas. Si la imagen de referencia muestra múltiples vistas (paneles), son TODAS de la MISMA ubicación desde diferentes ángulos.] "
+    : "[🚫 STRICT GLOBAL RULE: DO NOT add characters, objects, animals or additional elements that are not EXPLICITLY mentioned in the prompt. ONLY render exactly what is requested. DO NOT invent extras, background people, additional props, tools, utensils, or decorative elements. If it's not textually mentioned in the prompt or as [ImageX], it should NOT appear in the scene. FORBIDDEN to add context or environment elements not requested. 🏝️ LOCATIONS: DO NOT duplicate locations. If 'the island' is mentioned, it's ONE SINGLE island, NOT multiple islands or houses. If reference image shows multiple views (panels), they are ALL of the SAME location from different angles.] ";
   
   finalPrompt = characterCountInstruction + noExtraElementsInstruction + finalPrompt;
   
