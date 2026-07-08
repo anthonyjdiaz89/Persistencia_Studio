@@ -437,6 +437,19 @@ async function startServer() {
     });
   });
 
+  // API Route: Force-reset all key states (clear timers, mark all available)
+  app.post("/api/keys/reset", (_req, res) => {
+    apiKeys.forEach(keyInfo => {
+      keyInfo.isAvailable = true;
+      keyInfo.rateLimitResetTime = 0;
+      keyInfo.currentUsage = 0;
+      keyInfo.dailyVideosGenerated = 0;
+      keyInfo.dailyResetTime = Date.now() + (15 * 60 * 1000);
+    });
+    console.log(`[Multi-Key System] 🔄 All keys reset by user request`);
+    res.json({ success: true, message: `${apiKeys.length} keys reset to available`, keys: apiKeys.map(k => ({ alias: k.alias, isAvailable: k.isAvailable, currentUsage: k.currentUsage })) });
+  });
+
   // API Route: Firebase Config Delivery
   app.get("/api/firebase-config", (req, res) => {
     try {

@@ -1819,7 +1819,21 @@ export default function App() {
                       <span>Balanceo de Carga Activo</span>
                       <span className="text-emerald-400">{multiKeyStatus.availableKeys}/{multiKeyStatus.totalKeys} Keys Disponibles</span>
                     </div>
-                    <button onClick={() => setShowMultiKeyMonitor(false)} className="text-emerald-300 hover:text-white font-black text-xs px-2">✕</button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await fetch(`${API_BASE_URL}/api/keys/reset`, { method: 'POST' });
+                            await fetchMultiKeyStatus();
+                          } catch {}
+                        }}
+                        className="text-[10px] text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded font-mono transition-colors"
+                        title="Reiniciar timers de las keys"
+                      >
+                        Reset
+                      </button>
+                      <button onClick={() => setShowMultiKeyMonitor(false)} className="text-emerald-300 hover:text-white font-black text-xs px-2">✕</button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {multiKeyStatus.keys.map((key) => (
