@@ -1487,10 +1487,15 @@ JSON Schema:
           }
         }
         
-        // Handle 429 rate limit errors - mark key as unavailable (max 15 min - real API window)
+        // Handle 429 rate limit errors — use exact data from the API
         if (response.status === 429) {
-          const resetSeconds = responseData.details?.seconds_until_reset || 900;
-          markKeyAsRateLimited(apiKey, Math.min(resetSeconds, 15 * 60)); // Never block more than 15 min
+          const d = responseData.details || {};
+          const resetSeconds = d.seconds_until_reset || 900;
+          const resetTimeStr = d.reset_time || undefined;  // e.g. "2026-07-08 18:45:47"
+          const usage = d.current_usage ?? keyInfo?.currentUsage ?? 0;
+          const limit = (typeof d.limit === 'number') ? d.limit : 5;
+          if (keyInfo) { keyInfo.currentUsage = usage; keyInfo.limit = limit; }
+          markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
         }
         
         return res.status(response.status).json(normalizeProviderError(responseData, response.status));

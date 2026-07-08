@@ -1854,9 +1854,13 @@ export default function App() {
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
-                          <span>{key.currentUsage}/{key.limit} requests</span>
+                          <span>{key.currentUsage}/{key.limit} req</span>
                           {key.resetInSeconds > 0 && (
-                            <span>⏱️ {Math.ceil(key.resetInSeconds / 60)}min</span>
+                            <span className="text-rose-400">
+                              ⏱️ {key.resetInSeconds < 120
+                                ? `${key.resetInSeconds}s`
+                                : `${Math.ceil(key.resetInSeconds / 60)}min`}
+                            </span>
                           )}
                         </div>
                       </div>
