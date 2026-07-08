@@ -843,7 +843,7 @@ JSON Schema:
           rateLimitResetTime: 0,
           isAvailable: true,
           currentUsage: 0,
-          limit: 5,
+          limit: 999,  // Unlimited plan
           dailyVideosGenerated: 0,
           dailyResetTime: Date.now() + (15 * 60 * 1000)  // Reset in 15 min (API window)
         });
@@ -1059,80 +1059,11 @@ JSON Schema:
     return null;
   };
 
-  // In-memory sliding-window rate limiter for /api/seedance/generations.
-  const generationRateUsage = new Map<string, number[]>();
-  const sora2HourlyLimit = Number(process.env.SORA2_HOURLY_LIMIT || 50);
-
-  const enforceGenerationRateLimit = (apiKey: string, model: string) => {
-    const now = Date.now();
-    const rules: Array<{ id: string; limit: number; windowSeconds: number; description: string }> = [
-      {
-        id: "global_generate",
-        limit: 5,
-        windowSeconds: 10 * 60,
-        description: "Global /v1/generate limit"
-      }
-    ];
-
-    if (model === "kling-3" || model === "seedance-2") {
-      rules.push({
-        id: `${model}_model_limit`,
-        limit: 5,
-        windowSeconds: 15 * 60,
-        description: `${model} model-specific limit`
-      });
-    }
-
-    if (model === "sora-2") {
-      rules.push({
-        id: "sora2_hourly_limit",
-        limit: sora2HourlyLimit,
-        windowSeconds: 60 * 60,
-        description: "Sora 2 hourly limit"
-      });
-    }
-
-    const snapshots: Array<{
-      bucketKey: string;
-      rule: { id: string; limit: number; windowSeconds: number; description: string };
-      timestamps: number[];
-    }> = [];
-
-    for (const rule of rules) {
-      const bucketKey = `${apiKey}:${rule.id}`;
-      const existing = generationRateUsage.get(bucketKey) || [];
-      const windowMs = rule.windowSeconds * 1000;
-      const pruned = existing.filter((ts) => now - ts < windowMs);
-      snapshots.push({ bucketKey, rule, timestamps: pruned });
-    }
-
-    for (const snapshot of snapshots) {
-      if (snapshot.timestamps.length >= snapshot.rule.limit) {
-        const oldest = snapshot.timestamps[0];
-        const resetInSeconds = Math.max(1, Math.ceil((snapshot.rule.windowSeconds * 1000 - (now - oldest)) / 1000));
-        const resetAtUtc = new Date(now + resetInSeconds * 1000).toISOString();
-        return {
-          limited: true,
-          details: {
-            current_usage: snapshot.timestamps.length,
-            limit: snapshot.rule.limit,
-            window: `${Math.round(snapshot.rule.windowSeconds / 60)} minutes`,
-            seconds_until_reset: resetInSeconds,
-            reset_time: resetAtUtc,
-            rule: snapshot.rule.description
-          }
-        };
-      }
-    }
-
-    for (const snapshot of snapshots) {
-      snapshot.timestamps.push(now);
-      generationRateUsage.set(snapshot.bucketKey, snapshot.timestamps);
-    }
-
-    return { limited: false as const };
+  // In-memory rate limiter DISABLED — plan is Unlimited, API is the source of truth.
+  // Only 429 responses from the real API should mark keys as rate-limited.
+  const enforceGenerationRateLimit = (_apiKey: string, _model: string) => {
+    return { limited: false, details: null };
   };
-
   // Helper to normalize provider errors so the frontend can display actionable validation details.
   const normalizeProviderError = (responseData: any, statusCode: number) => {
     const fallbackMessage = `VideoGenAPI request failed with status ${statusCode}.`;
@@ -1493,16 +1424,14 @@ JSON Schema:
 
       const responseData = await response.json();
 
-      // Update key usage from API response (if rate_limit info is present)
+      // Only mark as rate-limited if the API itself returns rate_limit info AND usage >= limit
       if (responseData.rate_limit) {
         const usage = responseData.rate_limit.current_usage || 0;
-        const limit = responseData.rate_limit.limit || 5;
-        const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 600;
+        const limit = responseData.rate_limit.limit || 999;
+        const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 60;
         updateKeyUsage(apiKey, usage, limit);
-        
-        // If we're at the limit, mark key as rate-limited
-        if (usage >= limit) {
-          markKeyAsRateLimited(apiKey, secondsUntilReset);
+        if (limit !== "unlimited" && usage >= limit) {
+          markKeyAsRateLimited(apiKey, Math.min(secondsUntilReset, 15 * 60));
         }
       }
 
@@ -1516,13 +1445,12 @@ JSON Schema:
           fullErrorLower: JSON.stringify(responseData).toLowerCase()
         });
         
-        // Check for daily limit exceeded error - mark key as unavailable for 24 hours
+        // Check for rate limit error - mark key as limited for 15 min max
         const errorMessage = JSON.stringify(responseData).toLowerCase();
-        console.warn("[VideoGenAPI Proxy] 🔍 Checking for 'daily limit' in:", errorMessage.substring(0, 200));
         
-        if (errorMessage.includes("daily limit") || errorMessage.includes("dailylimit")) {
-          console.warn(`[VideoGenAPI Proxy] 🚫 ${apiKeys.find(k => k.key === apiKey)?.alias || 'Current key'} has exceeded daily limit - marking unavailable for 24 hours`);
-          markKeyAsRateLimited(apiKey, 86400); // 24 hours = 86400 seconds
+        if (errorMessage.includes("daily limit") || errorMessage.includes("dailylimit") || errorMessage.includes("rate limit")) {
+          console.warn(`[VideoGenAPI Proxy] ⚠️ Rate/daily limit hit on ${apiKeys.find(k => k.key === apiKey)?.alias || 'current key'} - marking for 15 min`);
+          markKeyAsRateLimited(apiKey, 15 * 60); // Cap at 15 min (real window)
           
           // Try with next available key
           const nextKey = selectBestAvailableApiKey();
