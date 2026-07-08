@@ -1467,14 +1467,17 @@ JSON Schema:
           const d = responseData.details || {};
           const rawMsg = JSON.stringify(responseData).toLowerCase();
           const isDailyLimit = rawMsg.includes("daily limit") || rawMsg.includes("exceeded the daily");
-          const resetSeconds = isDailyLimit ? 24 * 60 * 60 : (d.seconds_until_reset || 900);
+          // API is source of truth: use seconds_until_reset if provided, else retry in 30 min
+          const resetSeconds = d.seconds_until_reset || (isDailyLimit ? 30 * 60 : 900);
           const resetTimeStr = d.reset_time || undefined;
           const usage = d.current_usage ?? 5;
           const limit = (typeof d.limit === 'number') ? d.limit : 5;
           const hitKeyInfo = apiKeys.find(k => k.key === apiKey);
           if (hitKeyInfo) { hitKeyInfo.currentUsage = usage; hitKeyInfo.limit = limit; }
-          markKeyAsRateLimited(apiKey, resetSeconds, isDailyLimit ? undefined : resetTimeStr);
-          const waitDesc = isDailyLimit ? "límite diario (24h)" : `~${Math.ceil(resetSeconds/60)} min`;
+          markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
+          const waitDesc = isDailyLimit
+            ? `bloqueada (reintento en ${Math.ceil(resetSeconds/60)} min — la API dirá si sigue bloqueada)`
+            : `~${Math.ceil(resetSeconds/60)} min (dato real del API)`;
           console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada: ${waitDesc}. Auto-retrying with next key...`);
 
           // Transparent auto-retry with next available key
@@ -1497,8 +1500,12 @@ JSON Schema:
             // Retry also failed — check if retry key also hit daily/rate limit
             const retryMsg = JSON.stringify(retryData).toLowerCase();
             if (retryMsg.includes("daily limit") || retryMsg.includes("exceeded the daily")) {
-              markKeyAsRateLimited(nextKey.key, 24 * 60 * 60); // Daily limit = 24h
-              console.warn(`[VideoGenAPI Proxy] 🚫 ${nextKey.alias} hit daily limit too — marked unavailable for 24h`);
+              const retryRaw = JSON.stringify(retryData).toLowerCase();
+              if (retryRaw.includes("daily limit") || retryRaw.includes("exceeded the daily") || retryRaw.includes("rate limit")) {
+                // Retry in 30 min — the API will confirm if still blocked when we retry
+                markKeyAsRateLimited(nextKey.key, 30 * 60);
+                console.warn(`[VideoGenAPI Proxy] 🚧 ${nextKey.alias} also blocked — will retry in 30 min`);
+              }
             }
             return res.status(retryResponse.status).json(normalizeProviderError(retryData, retryResponse.status));
           }
