@@ -1,0 +1,9 @@
+[VideoGenAPI Proxy] Generation request rejected: {"error":"Failed to submit request to video generation service","details":"The current number of points used by apiKey has exceeded the daily limit"}
+[VideoGenAPI Proxy] 🔍 DEBUG - Error structure: {
+  hasError: true,
+  errorType: 'string',
+  hasDetails: true,
+  detailsType: 'string',
+  fullErrorLower: '{"error":"failed to submit request to video generation service","details":"the current number of points used by apikey has exceeded the daily limit"}'
+}
+[VideoGenAPI Proxy] ⚠️ Key 1 rate-limited (~15 min). Auto-retrying with next key...

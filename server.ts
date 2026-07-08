@@ -1458,45 +1458,58 @@ JSON Schema:
           fullErrorLower: JSON.stringify(responseData).toLowerCase()
         });
         
-        // Check for rate limit error - mark key as limited for 15 min max
-        const errorMessage = JSON.stringify(responseData).toLowerCase();
-        
-        if (errorMessage.includes("daily limit") || errorMessage.includes("dailylimit") || errorMessage.includes("rate limit")) {
-          console.warn(`[VideoGenAPI Proxy] ⚠️ Rate/daily limit hit on ${apiKeys.find(k => k.key === apiKey)?.alias || 'current key'} - marking for 15 min`);
-          markKeyAsRateLimited(apiKey, 15 * 60); // Cap at 15 min (real window)
-          
-          // Try with next available key
-          const nextKey = selectBestAvailableApiKey();
-          if (nextKey) {
-            console.log(`[VideoGenAPI Proxy] 🔄 Switching to ${nextKey.alias} - please retry your request`);
-            return res.status(503).json({
-              error: {
-                code: "daily_limit_exceeded",
-                message: "Current API key has exceeded daily limit. The system has switched to backup key. Please retry your request.",
-                details: ["Switched to backup API key. Please retry your request."]
-              }
-            });
-          } else {
-            console.warn(`[VideoGenAPI Proxy] ⚠️ All API keys are exhausted!`);
-            return res.status(503).json({
-              error: {
-                code: "all_keys_exhausted",
-                message: "All API keys have exceeded their daily limits. Please try again tomorrow.",
-                details: ["All API keys exhausted. Service unavailable until limits reset."]
-              }
-            });
-          }
-        }
-        
-        // Handle 429 rate limit errors — use exact data from the API
-        if (response.status === 429) {
+        // 429 or rate-limit error: mark key, then auto-retry with next key (transparent to client)
+        const isRateLimit = response.status === 429 ||
+          JSON.stringify(responseData).toLowerCase().includes("rate limit") ||
+          JSON.stringify(responseData).toLowerCase().includes("daily limit");
+
+        if (isRateLimit) {
           const d = responseData.details || {};
-          const resetSeconds = d.seconds_until_reset || 900;
-          const resetTimeStr = d.reset_time || undefined;  // e.g. "2026-07-08 18:45:47"
-          const usage = d.current_usage ?? keyInfo?.currentUsage ?? 0;
+          const rawMsg = JSON.stringify(responseData).toLowerCase();
+          const isDailyLimit = rawMsg.includes("daily limit") || rawMsg.includes("exceeded the daily");
+          const resetSeconds = isDailyLimit ? 24 * 60 * 60 : (d.seconds_until_reset || 900);
+          const resetTimeStr = d.reset_time || undefined;
+          const usage = d.current_usage ?? 5;
           const limit = (typeof d.limit === 'number') ? d.limit : 5;
-          if (keyInfo) { keyInfo.currentUsage = usage; keyInfo.limit = limit; }
-          markKeyAsRateLimited(apiKey, resetSeconds, resetTimeStr);
+          const hitKeyInfo = apiKeys.find(k => k.key === apiKey);
+          if (hitKeyInfo) { hitKeyInfo.currentUsage = usage; hitKeyInfo.limit = limit; }
+          markKeyAsRateLimited(apiKey, resetSeconds, isDailyLimit ? undefined : resetTimeStr);
+          const waitDesc = isDailyLimit ? "límite diario (24h)" : `~${Math.ceil(resetSeconds/60)} min`;
+          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada: ${waitDesc}. Auto-retrying with next key...`);
+
+          // Transparent auto-retry with next available key
+          const nextKey = selectBestAvailableApiKey();
+          if (nextKey && nextKey.key !== apiKey) {
+            console.log(`[VideoGenAPI Proxy] 🔄 Auto-switching to ${nextKey.alias}`);
+            const retryResponse = await fetch("https://videogenapi.com/api/v1/generate", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${nextKey.key}`, "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const retryData = await retryResponse.json();
+            if (retryResponse.ok) {
+              nextKey.currentUsage = (nextKey.currentUsage || 0) + 1;
+              console.log(`[VideoGenAPI Proxy] ✅ Auto-retry succeeded with ${nextKey.alias}`);
+              const retryTaskId = retryData.generation_id;
+              if (retryTaskId) { webhookTasksStore.set(retryTaskId, { id: retryTaskId, status: "queued", created_at: Math.floor(Date.now()/1000), model: model || "seedance-2-0", data: null }); }
+              return res.json({ success: true, taskId: retryTaskId, generation_id: retryTaskId, auto_switched_key: nextKey.alias });
+            }
+            // Retry also failed — check if retry key also hit daily/rate limit
+            const retryMsg = JSON.stringify(retryData).toLowerCase();
+            if (retryMsg.includes("daily limit") || retryMsg.includes("exceeded the daily")) {
+              markKeyAsRateLimited(nextKey.key, 24 * 60 * 60); // Daily limit = 24h
+              console.warn(`[VideoGenAPI Proxy] 🚫 ${nextKey.alias} hit daily limit too — marked unavailable for 24h`);
+            }
+            return res.status(retryResponse.status).json(normalizeProviderError(retryData, retryResponse.status));
+          }
+
+          // No other key available
+          const waitMin = Math.ceil(resetSeconds / 60);
+          return res.status(429).json({
+            error: "rate_limit_exceeded",
+            message: `Ambas keys en límite. Tiempo de espera: ~${waitMin} min (reset a las ${resetTimeStr || 'pronto'})`,
+            details: { seconds_until_reset: resetSeconds, reset_time: resetTimeStr }
+          });
         }
         
         return res.status(response.status).json(normalizeProviderError(responseData, response.status));

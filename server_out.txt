@@ -1,0 +1,182 @@
+◇ injected env (9) from .env // tip: ⌘ enable debugging { debug: true }
+
+======================================================================
+🔍 DIAGNÓSTICO DE VARIABLES DE ENTORNO
+======================================================================
+📍 NODE_ENV: not set
+📍 PORT: not set
+
+🔑 Variables de API Keys:
+  ✅ VIDEOGEN_API_KEY: lannetech_07cde...5337 (74 chars)
+  ✅ VIDEOGEN_API_KEY_1: lannetech_07cde...5337 (74 chars)
+  ✅ VIDEOGEN_API_KEY_2: lannetech_a856d...84ee (74 chars)
+  ❌ VIDEOGEN_API_KEY_3: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_4: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_5: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_6: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_7: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_8: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_9: NO CONFIGURADA
+  ❌ VIDEOGEN_API_KEY_10: NO CONFIGURADA
+  ✅ SEEDANCE_API_KEY: sk_live_......_... (11 chars)
+
+🗄️ Variables de Base de Datos:
+  ✅ SUPABASE_URL: https://bd.persistenciadigital...
+  ✅ SUPABASE_ANON_KEY: eyJ0eXAiOiJKV1QiLCJh...
+  ✅ GEMINI_API_KEY: CONFIGURADA
+
+📊 Resultado de Carga de API Keys:
+[Multi-Key System] ✅ Loaded 2 API key(s) for load balancing
+  [1] Key 1: lannetech_07cde6a6f9... (available: true)
+  [2] Key 2: lannetech_a856d87d15... (available: true)
+======================================================================
+
+🚀 Server running on http://localhost:3000
+📊 Environment: development
+🔑 API Keys loaded: 2
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[Supabase Config] URL: https://bd.persistenciadigital.com
+[Supabase Config] Key: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[Multi-Key System] Selected Key 1 (0/5 used) [drain-first strategy]
+[VideoGenAPI Proxy] Received resolution: "720p" (type: string)
+[VideoGenAPI Proxy] 📹 RESOLUTION BEING SENT: 720p
+[VideoGenAPI Proxy] Forwarding creation request to VideoGenAPI... {"model":"seedance-2","prompt":"Isla tropical amanecer palmeras agua turquesa sin personas","aspect_ratio":"16:9","duration":5,"resolution":"720p","style":"realistic","add_audio":false,"return_last_frame":false,"web_search":false,"nsfw_checker":false,"seed":-1,"callback_url":"MY_APP_URL/api/seedance/webhook"}
+[Multi-Key System] 🔴 Key 1 RATE-LIMITED for 15 min (API reported 15 min, capped to 15 min window)
+[Multi-Key System]    Reset time: 14:04:47 COT (2026-07-08T19:04:47.049Z)
+[Multi-Key System] Selected Key 2 (0/5 used) [drain-first strategy]
+[VideoGenAPI Proxy] 🔄 Auto-switching to Key 2
+[2m1:52:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver.ts[22m
+[2m1:52:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver_err.txt[22m
+[2m1:52:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver_out.txt[22m
+[Supabase Config] URL: https://bd.persistenciadigital.com
+[Supabase Config] Key: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[2m1:52:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver.ts[22m
+[2m1:52:37 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver_out.txt[22m
+[Supabase Config] URL: https://bd.persistenciadigital.com
+[Supabase Config] Key: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[VideoGenAPI Proxy] 🔍 History request received. Has API key: true
+[VideoGenAPI Proxy] 📡 Fetching generations history from VideoGenAPI...
+[VideoGenAPI Proxy] Using API key: lannetech_07cde6a6f9...
+[VideoGenAPI Proxy] /api/v1/generations response status: 200
+[VideoGenAPI Proxy] ✅ History fetch successful from /api/v1/generations.
+[VideoGenAPI Proxy] 📊 Found 20 videos
+[VideoGenAPI Proxy] 🔍 Full sample object: {
+  generation_id: 'gen_6a4e84fc5c1af_359043',
+  status: 'completed',
+  type: 'reference-to-video',
+  prompt: "[???? INSTRUCCIÓN CRÍTICA DE LOCALIZACIÓN: La imagen de referencia de la isla muestra 4 PANELES (aéreo, frontal, lateral, detalle) que son DIFERENTES ÁNGULOS DE LA MISMA ISLA. ⚠️ CONCEPTO FUNDAMENTAL: La localización NO es el paisaje de fondo, es el ENTORNO DONDE EL PERSONAJE ESTÁ SITUADO. Si el personaje camina en la isla, él está PARADO/CAMINANDO SOBRE la superficie de la isla (arena, hierba, madera del muelle). La isla NO debe aparecer como un paisaje lejano al fondo. PROHIBIDO renderizar los 4 paneles simultáneamente. PROHIBIDO crear 2 o más islas. ELEGIR UNA vista apropiada para situar al personaje EN ese lugar. El personaje está EN/SOBRE la localización, NO mirando hacia ella desde otro lugar.] [???? REGLA DE LOCALIZACIONES: Cuando se menciona una localización (ej: 'en la isla', 'en la playa'), el personaje está SITUADO EN/SOBRE ese lugar, NO mirando hacia él. La localización es el SUELO/ENTORNO donde el personaje se encuentra parado/caminando/sentado. NO renderizar la localización como un paisaje lejano o isla al fondo. El personaje y la localización comparten el MISMO ESPACIO físico.] [⚠️ CONTEO EXACTO: SOLO 1 personaje(s) en escena: Lia. NO duplicar ningún personaje. NO agregar personas extras. EXACTAMENTE 1 personaje(s), ni más ni menos.] [???? REGLA GLOBAL ESTRICTA: NO agregar personajes, objetos, animales o elementos adicionales que no estén EXPLÍCITAMENTE mencionados en el prompt. SOLO renderizar exactamente lo que se pide. NO inventar extras, personas de fondo, props adicionales, herramientas, utensilios, o elementos decorativos. Si no está mencionado textualmente en el prompt o como [ImageX], NO debe aparecer en la escena. PROHIBIDO agregar elementos de contexto o ambiente no solicitados.] Lia [Image1] (small child 1 meter tall, half the height of adult Tomas) construye un castillo de arena en la playa de en la locación Isla [Image2] ???? REFERENCIA DE DISEÑO (elegir UNA vista apropiada, el personaje está SITUADO EN/SOBRE esta localización, NO es un paisaje de fondo. El personaje CAMINA/ESTÁ PARADO EN este lugar) (isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas), high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering, nighttime after-hours atmosphere, soft moonlight or warm practical indoor lights, deep blue hour tones if outdoors, gentle star-filled sky, cool ambient shadows with warm accent lights, cozy evening 8pm mood, orbiting 360-degree camera spin, steady rotation around subject",
+  style: 'realistic',
+  fps: 30,
+  created_at: '2026-07-08 17:12:28',
+  updated_at: '2026-07-08 17:15:29',
+  video_url: 'https://videogenapi.com/api/v1/video/gen_6a4e84fc5c1af_359043',
+  processing_time: 173
+}
+[2m1:52:53 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mserver_out.txt[22m
