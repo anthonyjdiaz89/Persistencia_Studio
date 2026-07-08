@@ -998,11 +998,21 @@ JSON Schema:
   // ── Exponential Backoff (transient 5xx only — NOT for 429 or quota limits) ────
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-  const QUOTA_KEYWORDS = ["daily limit", "rate limit", "exceeded", "points used", "quota", "insufficient balance"];
+  // Quota/limit detection: based on BODY content, not status code alone.
+  // A 500 can be transient OR a quota error — the body text tells us which.
+  // These keywords come from actual API responses (verified by direct API calls).
+  const QUOTA_BODY_PHRASES = [
+    "exceeded the daily limit",   // 500: "The current number of points used by apiKey has exceeded the daily limit"
+    "rate limit exceeded",         // 429: "Seedance 2 rate limit exceeded"
+    "per 15 minutes",              // 429: "limited to 5 generations per 15 minutes"
+    "points used",                 // 500: points quota
+    "insufficient balance",        // 402: paid model, no credits
+    "monthly usage limit",         // monthly cap
+  ];
   const isQuotaError = (data: any, status: number): boolean => {
     if (status === 429) return true;
     const body = JSON.stringify(data).toLowerCase();
-    return QUOTA_KEYWORDS.some(k => body.includes(k));
+    return QUOTA_BODY_PHRASES.some(phrase => body.includes(phrase));
   };
 
   const fetchWithTransientRetry = async (url: string, opts: RequestInit, maxRetries = 2): Promise<{ response: Response; data: any; rateLimitWindow?: number }> => {
@@ -1015,7 +1025,8 @@ JSON Schema:
         : undefined;
       // Quota/rate-limit errors: NEVER retry (API penalizes retries)
       if (isQuotaError(data, response.status)) {
-        console.warn(`[Backoff] Quota/rate-limit error (HTTP ${response.status}) — NOT retrying. Window: ${rateLimitWindow ?? 'unknown'}s`);
+        const matched = QUOTA_BODY_PHRASES.find(p => JSON.stringify(data).toLowerCase().includes(p));
+        console.warn(`[Backoff] Quota error (HTTP ${response.status}) — body phrase: "${matched}" — NOT retrying. Window header: ${rateLimitWindow ?? 'n/a'}s`);
         return { response, data, rateLimitWindow };
       }
       // Retry only truly transient 5xx (network blip, server restart, etc.)
