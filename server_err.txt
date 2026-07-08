@@ -1,3 +1,28 @@
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/isla.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
 [VideoGenAPI Proxy] Generation request rejected: {"error":"Failed to submit request to video generation service","details":"The current number of points used by apiKey has exceeded the daily limit"}
 [VideoGenAPI Proxy] 🔍 DEBUG - Error structure: {
   hasError: true,
@@ -6,4 +31,73 @@
   detailsType: 'string',
   fullErrorLower: '{"error":"failed to submit request to video generation service","details":"the current number of points used by apikey has exceeded the daily limit"}'
 }
-[VideoGenAPI Proxy] ⚠️ Key 1 rate-limited (~15 min). Auto-retrying with next key...
+[VideoGenAPI Proxy] ⚠️ Key 1 bloqueada: bloqueada (reintento en 30 min — la API dirá si sigue bloqueada). Auto-retrying with next key...
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/isla.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[VideoGenAPI Proxy] Generation request rejected: {"error":"Seedance 2 rate limit exceeded","message":"The Seedance 2 model is limited to 5 generations per 15 minutes for all plans (including Unlimited).","details":{"current_usage":5,"limit":5,"window":"15 minutes","model":"Seedance 2","reset_time":"2026-07-08 19:21:25","seconds_until_reset":18}}
+[VideoGenAPI Proxy] 🔍 DEBUG - Error structure: {
+  hasError: true,
+  errorType: 'string',
+  hasDetails: true,
+  detailsType: 'object',
+  fullErrorLower: '{"error":"seedance 2 rate limit exceeded","message":"the seedance 2 model is limited to 5 generations per 15 minutes for all plans (including unlimited).","details":{"current_usage":5,"limit":5,"window":"15 minutes","model":"seedance 2","reset_time":"2026-07-08 19:21:25","seconds_until_reset":18}}'
+}
+[VideoGenAPI Proxy] ⚠️ Key 2 bloqueada: ~1 min (dato real del API). Auto-retrying with next key...
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/isla.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[Image Dimension Enforcer] Failed to read dimensions of https://bd.persistenciadigital.com/storage/v1/object/public/video-assets/reference-frames/hf_20260703_181242_91895a54-3ea8-4bef-a3fd-9c267ba9c111.png: TypeError: (0 , import_image_size.default) is not a function
+    at ensureMinImageDimensions (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:90:52)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async normalizeImageUrls (C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:260:21)
+    at async C:\Users\anjod\Downloads\seedance-2.0-video-generator (1)\dist\server.cjs:1023:37
+[VideoGenAPI Proxy] Generation request rejected: {"error":"Failed to submit request to video generation service","details":"The current number of points used by apiKey has exceeded the daily limit"}
+[VideoGenAPI Proxy] 🔍 DEBUG - Error structure: {
+  hasError: true,
+  errorType: 'string',
+  hasDetails: true,
+  detailsType: 'string',
+  fullErrorLower: '{"error":"failed to submit request to video generation service","details":"the current number of points used by apikey has exceeded the daily limit"}'
+}
+[VideoGenAPI Proxy] ⚠️ Key 2 bloqueada: bloqueada (reintento en 30 min — la API dirá si sigue bloqueada). Auto-retrying with next key...
+[VideoGenAPI Proxy] 🚧 Key 1 also blocked — will retry in 30 min

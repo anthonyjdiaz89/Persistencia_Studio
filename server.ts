@@ -446,6 +446,7 @@ async function startServer() {
       keyInfo.dailyVideosGenerated = 0;
       keyInfo.dailyResetTime = Date.now() + (15 * 60 * 1000);
     });
+    saveKeyStates(); // Persist the cleared state
     console.log(`[Multi-Key System] 🔄 All keys reset by user request`);
     res.json({ success: true, message: `${apiKeys.length} keys reset to available`, keys: apiKeys.map(k => ({ alias: k.alias, isAvailable: k.isAvailable, currentUsage: k.currentUsage })) });
   });
@@ -975,9 +976,50 @@ JSON Schema:
     console.log('');
   }, 5 * 60 * 1000); // Every 5 minutes
 
-  // Select best available API key (round-robin, always tries — never blocks locally)
-  // The API is the source of truth for rate limits, not our internal timer.
-  // No round-robin index needed — strategy is "drain first, then switch"
+  // Persistent key state file — survives server restarts
+  const KEY_STATE_FILE = path.join(process.cwd(), 'key-states.json');
+
+  const saveKeyStates = () => {
+    try {
+      const state = apiKeys.map(k => ({
+        alias: k.alias,
+        keyPreview: k.key.substring(0, 15),
+        isAvailable: k.isAvailable,
+        rateLimitResetTime: k.rateLimitResetTime,  // exact UTC ms from API
+        currentUsage: k.currentUsage,
+        limit: k.limit
+      }));
+      fs.writeFileSync(KEY_STATE_FILE, JSON.stringify(state, null, 2));
+    } catch (e) { console.warn('[KeyState] Could not save state:', e); }
+  };
+
+  const loadKeyStates = () => {
+    try {
+      if (!fs.existsSync(KEY_STATE_FILE)) return;
+      const saved: any[] = JSON.parse(fs.readFileSync(KEY_STATE_FILE, 'utf8'));
+      const now = Date.now();
+      saved.forEach(s => {
+        const key = apiKeys.find(k => k.key.startsWith(s.keyPreview));
+        if (!key) return;
+        // Only restore if reset time is still in the future
+        if (s.rateLimitResetTime && s.rateLimitResetTime > now) {
+          key.isAvailable = false;
+          key.rateLimitResetTime = s.rateLimitResetTime;
+          key.currentUsage = s.currentUsage ?? key.currentUsage;
+          key.limit = s.limit ?? key.limit;
+          const secsLeft = Math.ceil((s.rateLimitResetTime - now) / 1000);
+          const resetAt = new Date(s.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
+          console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT)`);
+        }
+      });
+      console.log('[KeyState] Estado cargado desde disco.');
+    } catch (e) { console.warn('[KeyState] Could not load state:', e); }
+  };
+
+  // Load persisted state immediately
+  loadKeyStates();
+
+  // Select best available API key — drain first strategy
   const selectBestAvailableApiKey = (ignoreRateLimit = false): ApiKeyInfo | null => {
     if (apiKeys.length === 0) return null;
     
@@ -1010,36 +1052,38 @@ JSON Schema:
       return firstAvailable;
     }
     
-    // All keys show as rate-limited locally — but we don't know the real API state.
-    // Return the key whose stored reset is soonest so we can try it; if the API 
-    // is still blocking it will return 429 with real wait time.
+    // All keys are rate-limited — NEVER retry during the wait period.
+    // The API penalizes retries by resetting the timer to 15 min again.
+    // Return null and let the client show the real wait time.
     const soonestReset = apiKeys.reduce((earliest, current) => 
       current.rateLimitResetTime < earliest.rateLimitResetTime ? current : earliest
     );
     const waitSec = Math.max(0, Math.ceil((soonestReset.rateLimitResetTime - now) / 1000));
-    console.log(`[Multi-Key System] All keys locally rate-limited. Trying ${soonestReset.alias} anyway (reset in ~${Math.ceil(waitSec/60)} min according to local state).`);
-    // Mark it as available so the request goes through; the API will confirm or reject
-    soonestReset.isAvailable = true;
-    soonestReset.currentUsage = 0;
+    console.log(`[Multi-Key System] ⏳ All keys blocked. Soonest reset: ${soonestReset.alias} in ${Math.ceil(waitSec/60)} min. NOT retrying (API penalizes retries).`);
+    return null;
     return soonestReset;
   };
 
-  // Mark a key as rate-limited
-  const markKeyAsRateLimited = (keyString: string, resetInSeconds: number) => {
+  // Mark a key as rate-limited using EXACT reset_time from the API (persistent)
+  const markKeyAsRateLimited = (keyString: string, resetInSeconds: number, resetTimeStr?: string) => {
     const keyInfo = apiKeys.find(k => k.key === keyString);
     if (keyInfo) {
-      // Cap reset time to 15 minutes max — that's the real API window
-      const cappedSeconds = Math.min(resetInSeconds, 15 * 60);
       keyInfo.isAvailable = false;
-      keyInfo.rateLimitResetTime = Date.now() + (cappedSeconds * 1000);
+      // Use API's exact reset_time if provided (most accurate), else calculate
+      if (resetTimeStr) {
+        // reset_time from API is UTC: e.g. "2026-07-08 19:17:14"
+        keyInfo.rateLimitResetTime = new Date(resetTimeStr.replace(' ', 'T') + 'Z').getTime();
+      } else {
+        keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
+      }
       keyInfo.currentUsage = keyInfo.limit;
-      
-      const resetDate = new Date(keyInfo.rateLimitResetTime);
-      const resetTimeCOT = resetDate.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-      const resetMinutes = Math.ceil(cappedSeconds / 60);
-      
-      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED for ${resetMinutes} min (API reported ${Math.ceil(resetInSeconds/60)} min, capped to 15 min window)`);
-      console.log(`[Multi-Key System]    Reset time: ${resetTimeCOT} COT (${resetDate.toISOString()})`);
+
+      const secsLeft = Math.ceil((keyInfo.rateLimitResetTime - Date.now()) / 1000);
+      const resetAt = new Date(keyInfo.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
+      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED ~${Math.ceil(secsLeft/60)} min | Reset: ${resetAt} COT | reset_time API: ${resetTimeStr || 'calculado'}`);
+
+      // Persist to disk — survives server restarts
+      saveKeyStates();
     }
   };
 
@@ -1055,20 +1099,26 @@ JSON Schema:
   };
 
   // Helper to resolve the Seedance/VideoGenAPI API Key (from request headers or load balancer)
-  // The API is the source of truth — we always try, never block locally based on timers.
+  // Returns null when all keys are blocked — caller must NOT retry, it penalizes the API wait.
   const getApiKey = (req: express.Request, ignoreRateLimit = false): string | { allKeysExhausted: true; waitSeconds: number; resetTime: string } | null => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 7) {
       return authHeader.substring(7);
     }
     
-    // Use load balancing system — always returns a key (never null when keys exist)
     const selectedKey = selectBestAvailableApiKey(ignoreRateLimit);
     if (selectedKey) {
       return selectedKey.key;
     }
     
-    // No keys configured at all
+    // All keys are blocked — return wait info so UI can show correct time
+    if (apiKeys.length > 0 && !ignoreRateLimit) {
+      const now = Date.now();
+      const soonest = apiKeys.reduce((a, b) => a.rateLimitResetTime < b.rateLimitResetTime ? a : b);
+      const waitSeconds = Math.max(1, Math.ceil((soonest.rateLimitResetTime - now) / 1000));
+      return { allKeysExhausted: true, waitSeconds, resetTime: new Date(soonest.rateLimitResetTime).toISOString() };
+    }
+    
     return null;
   };
 
@@ -1478,12 +1528,13 @@ JSON Schema:
           const waitDesc = isDailyLimit
             ? `bloqueada (reintento en ${Math.ceil(resetSeconds/60)} min — la API dirá si sigue bloqueada)`
             : `~${Math.ceil(resetSeconds/60)} min (dato real del API)`;
-          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada: ${waitDesc}. Auto-retrying with next key...`);
+          console.warn(`[VideoGenAPI Proxy] ⚠️ ${hitKeyInfo?.alias || 'Key'} bloqueada: ${waitDesc}.`);
 
-          // Transparent auto-retry with next available key
+          // Auto-retry ONLY if next key is confirmed available (not rate-limited)
+          // NEVER retry with a blocked key — the API penalizes each retry with +15 min
           const nextKey = selectBestAvailableApiKey();
-          if (nextKey && nextKey.key !== apiKey) {
-            console.log(`[VideoGenAPI Proxy] 🔄 Auto-switching to ${nextKey.alias}`);
+          if (nextKey && nextKey.key !== apiKey && nextKey.isAvailable) {
+            console.log(`[VideoGenAPI Proxy] 🔄 Auto-switching to ${nextKey.alias} (confirmed available)`);
             const retryResponse = await fetch("https://videogenapi.com/api/v1/generate", {
               method: "POST",
               headers: { "Authorization": `Bearer ${nextKey.key}`, "Content-Type": "application/json" },
@@ -1492,20 +1543,18 @@ JSON Schema:
             const retryData = await retryResponse.json();
             if (retryResponse.ok) {
               nextKey.currentUsage = (nextKey.currentUsage || 0) + 1;
+              saveKeyStates();
               console.log(`[VideoGenAPI Proxy] ✅ Auto-retry succeeded with ${nextKey.alias}`);
               const retryTaskId = retryData.generation_id;
               if (retryTaskId) { webhookTasksStore.set(retryTaskId, { id: retryTaskId, status: "queued", created_at: Math.floor(Date.now()/1000), model: model || "seedance-2-0", data: null }); }
               return res.json({ success: true, taskId: retryTaskId, generation_id: retryTaskId, auto_switched_key: nextKey.alias });
             }
-            // Retry also failed — check if retry key also hit daily/rate limit
-            const retryMsg = JSON.stringify(retryData).toLowerCase();
-            if (retryMsg.includes("daily limit") || retryMsg.includes("exceeded the daily")) {
-              const retryRaw = JSON.stringify(retryData).toLowerCase();
-              if (retryRaw.includes("daily limit") || retryRaw.includes("exceeded the daily") || retryRaw.includes("rate limit")) {
-                // Retry in 30 min — the API will confirm if still blocked when we retry
-                markKeyAsRateLimited(nextKey.key, 30 * 60);
-                console.warn(`[VideoGenAPI Proxy] 🚧 ${nextKey.alias} also blocked — will retry in 30 min`);
-              }
+            // Retry also failed — mark next key and do NOT retry again
+            const retryRaw = JSON.stringify(retryData).toLowerCase();
+            if (retryRaw.includes("rate limit") || retryRaw.includes("daily limit") || retryRaw.includes("exceeded")) {
+              const retryD = retryData.details || {};
+              markKeyAsRateLimited(nextKey.key, retryD.seconds_until_reset || 900, retryD.reset_time);
+              console.warn(`[VideoGenAPI Proxy] 🚧 ${nextKey.alias} also blocked. NOT retrying further.`);
             }
             return res.status(retryResponse.status).json(normalizeProviderError(retryData, retryResponse.status));
           }
