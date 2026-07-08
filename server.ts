@@ -378,11 +378,33 @@ async function startServer() {
 
   // API Route: Health Check and Config
   app.get("/api/config", (req, res) => {
+    // Verificar qué variables están configuradas
+    const apiKeyStatus = {
+      VIDEOGEN_API_KEY: !!process.env.VIDEOGEN_API_KEY,
+      VIDEOGEN_API_KEY_1: !!process.env.VIDEOGEN_API_KEY_1,
+      VIDEOGEN_API_KEY_2: !!process.env.VIDEOGEN_API_KEY_2,
+      VIDEOGEN_API_KEY_3: !!process.env.VIDEOGEN_API_KEY_3,
+      VIDEOGEN_API_KEY_4: !!process.env.VIDEOGEN_API_KEY_4,
+      VIDEOGEN_API_KEY_5: !!process.env.VIDEOGEN_API_KEY_5,
+      SEEDANCE_API_KEY: !!process.env.SEEDANCE_API_KEY
+    };
+    
+    const hasAnyApiKey = Object.values(apiKeyStatus).some(v => v === true);
+    
     res.json({ 
-      status: "ok", 
-      hasApiKey: !!(process.env.VIDEOGEN_API_KEY || process.env.SEEDANCE_API_KEY),
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || '3000',
+      hasApiKey: hasAnyApiKey,
       hasGeminiKey: !!process.env.GEMINI_API_KEY,
-      multiKeyEnabled: apiKeys.length > 1
+      hasSupabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
+      multiKeyEnabled: apiKeys.length > 1,
+      totalKeys: apiKeys.length,
+      apiKeyStatus: apiKeyStatus,
+      diagnostic: hasAnyApiKey 
+        ? `✅ ${apiKeys.length} API key(s) loaded successfully`
+        : '❌ NO API KEYS DETECTED - Check environment variables in Coolify Dashboard → Environment'
     });
   });
 
@@ -850,10 +872,66 @@ JSON Schema:
 
   // Initialize API keys on server start
   apiKeys.push(...loadApiKeys());
-  console.log(`[Multi-Key System] ✅ Loaded ${apiKeys.length} API key(s) for load balancing`);
-  apiKeys.forEach((keyInfo, idx) => {
-    console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}... (available: ${keyInfo.isAvailable})`);
+  
+  // 🔍 DIAGNÓSTICO: Log detallado del entorno
+  console.log('\n' + '='.repeat(70));
+  console.log('🔍 DIAGNÓSTICO DE VARIABLES DE ENTORNO');
+  console.log('='.repeat(70));
+  console.log(`📍 NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+  console.log(`📍 PORT: ${process.env.PORT || 'not set'}`);
+  
+  // Verificar variables de VideoGenAPI (sin mostrar valores completos)
+  const apiKeyVars = [
+    'VIDEOGEN_API_KEY',
+    'VIDEOGEN_API_KEY_1',
+    'VIDEOGEN_API_KEY_2',
+    'VIDEOGEN_API_KEY_3',
+    'VIDEOGEN_API_KEY_4',
+    'VIDEOGEN_API_KEY_5',
+    'VIDEOGEN_API_KEY_6',
+    'VIDEOGEN_API_KEY_7',
+    'VIDEOGEN_API_KEY_8',
+    'VIDEOGEN_API_KEY_9',
+    'VIDEOGEN_API_KEY_10',
+    'SEEDANCE_API_KEY'
+  ];
+  
+  console.log('\n🔑 Variables de API Keys:');
+  apiKeyVars.forEach(varName => {
+    const value = process.env[varName];
+    if (value) {
+      console.log(`  ✅ ${varName}: ${value.substring(0, 15)}...${value.substring(value.length - 4)} (${value.length} chars)`);
+    } else {
+      console.log(`  ❌ ${varName}: NO CONFIGURADA`);
+    }
   });
+  
+  // Verificar otras variables importantes
+  console.log('\n🗄️ Variables de Base de Datos:');
+  console.log(`  ${process.env.SUPABASE_URL ? '✅' : '❌'} SUPABASE_URL: ${process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) + '...' : 'NO CONFIGURADA'}`);
+  console.log(`  ${process.env.SUPABASE_ANON_KEY ? '✅' : '❌'} SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? process.env.SUPABASE_ANON_KEY.substring(0, 20) + '...' : 'NO CONFIGURADA'}`);
+  console.log(`  ${process.env.GEMINI_API_KEY ? '✅' : '❌'} GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'CONFIGURADA' : 'NO CONFIGURADA (opcional)'}`);
+  
+  console.log('\n📊 Resultado de Carga de API Keys:');
+  console.log(`[Multi-Key System] ${apiKeys.length > 0 ? '✅' : '❌'} Loaded ${apiKeys.length} API key(s) for load balancing`);
+  
+  if (apiKeys.length === 0) {
+    console.log('\n⚠️ ⚠️ ⚠️ ADVERTENCIA CRÍTICA ⚠️ ⚠️ ⚠️');
+    console.log('NO SE DETECTARON API KEYS EN LAS VARIABLES DE ENTORNO');
+    console.log('El botón de generación estará DESHABILITADO en el frontend');
+    console.log('\n📝 Para solucionar:');
+    console.log('1. En Coolify Dashboard → Tu aplicación → Environment');
+    console.log('2. Agregar variables:');
+    console.log('   VIDEOGEN_API_KEY_1=lannetech_tu_key_aqui');
+    console.log('   VIDEOGEN_API_KEY_2=lannetech_tu_segunda_key_aqui');
+    console.log('3. Guardar y redeploy');
+    console.log('='.repeat(70) + '\n');
+  } else {
+    apiKeys.forEach((keyInfo, idx) => {
+      console.log(`  [${idx + 1}] ${keyInfo.alias}: ${keyInfo.key.substring(0, 20)}... (available: ${keyInfo.isAvailable})`);
+    });
+    console.log('='.repeat(70) + '\n');
+  }
 
   // Reset daily counters when 24h window expires
   setInterval(() => {
