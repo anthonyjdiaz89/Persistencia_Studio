@@ -823,8 +823,8 @@ JSON Schema:
     isAvailable: boolean;
     currentUsage: number;
     limit: number;
-    dailyVideosGenerated: number;  // Track daily usage
-    dailyResetTime: number;        // When daily count resets (24h from first use)
+    dailyVideosGenerated: number;  // Track usage in current 15-min window
+    dailyResetTime: number;        // When 15-min window resets
   }
 
   const apiKeys: ApiKeyInfo[] = [];
@@ -845,24 +845,7 @@ JSON Schema:
           currentUsage: 0,
           limit: 5,
           dailyVideosGenerated: 0,
-          dailyResetTime: Date.now() + (24 * 60 * 60 * 1000)  // Reset in 24h
-        });
-      }
-    }
-    
-    // Fallback to single key if no numbered keys found
-    if (keys.length === 0) {
-      const singleKey = process.env.VIDEOGEN_API_KEY || process.env.SEEDANCE_API_KEY;
-      if (singleKey && singleKey.trim()) {
-        keys.push({
-          key: singleKey.trim(),
-          alias: "Primary Key",
-          rateLimitResetTime: 0,
-          isAvailable: true,
-          currentUsage: 0,
-          limit: 5,
-          dailyVideosGenerated: 0,
-          dailyResetTime: Date.now() + (24 * 60 * 60 * 1000)
+          dailyResetTime: Date.now() + (15 * 60 * 1000)  // Reset in 15 min (API window)
         });
       }
     }
@@ -938,9 +921,9 @@ JSON Schema:
     const now = Date.now();
     apiKeys.forEach((keyInfo) => {
       if (now >= keyInfo.dailyResetTime) {
-        console.log(`[Multi-Key System] 🔄 ${keyInfo.alias} daily counter reset: ${keyInfo.dailyVideosGenerated} videos generated today`);
+        console.log(`[Multi-Key System] 🔄 ${keyInfo.alias} 15-min window reset: ${keyInfo.dailyVideosGenerated} videos in last window`);
         keyInfo.dailyVideosGenerated = 0;
-        keyInfo.dailyResetTime = now + (24 * 60 * 60 * 1000);
+        keyInfo.dailyResetTime = now + (15 * 60 * 1000); // Next 15-min window
       }
     });
   }, 60 * 1000); // Check every minute
@@ -1031,15 +1014,17 @@ JSON Schema:
   const markKeyAsRateLimited = (keyString: string, resetInSeconds: number) => {
     const keyInfo = apiKeys.find(k => k.key === keyString);
     if (keyInfo) {
+      // Cap reset time to 15 minutes max — that's the real API window
+      const cappedSeconds = Math.min(resetInSeconds, 15 * 60);
       keyInfo.isAvailable = false;
-      keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
+      keyInfo.rateLimitResetTime = Date.now() + (cappedSeconds * 1000);
       keyInfo.currentUsage = keyInfo.limit;
       
       const resetDate = new Date(keyInfo.rateLimitResetTime);
       const resetTimeCOT = resetDate.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-      const resetMinutes = Math.ceil(resetInSeconds / 60);
+      const resetMinutes = Math.ceil(cappedSeconds / 60);
       
-      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED for ${resetMinutes} min (${resetInSeconds}s)`);
+      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED for ${resetMinutes} min (API reported ${Math.ceil(resetInSeconds/60)} min, capped to 15 min window)`);
       console.log(`[Multi-Key System]    Reset time: ${resetTimeCOT} COT (${resetDate.toISOString()})`);
     }
   };
