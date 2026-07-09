@@ -392,10 +392,7 @@ export default function App() {
   const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(null);
 
   // Generation queue — 3-minute spacing to never hit rate limit
-  const GENERATION_SPACING_MS = 3 * 60 * 1000; // Max spacing (only when approaching limit)
-  const MIN_SPACING_MS = 10 * 1000;             // Minimum spacing between requests (10s safety gap)
-  // State to track current key usage from API responses
-  const [currentKeyUsage, setCurrentKeyUsage] = useState<{usage: number; limit: number; resetSecs: number}>({usage: 0, limit: 5, resetSecs: 900});
+  const GENERATION_SPACING_MS = 3 * 60 * 1000; // 3 min universal between every request
   const lastGenerationTime = useRef<number>(0);
   const [queueCountdown, setQueueCountdown] = useState<number>(0); // seconds remaining before next send
   
@@ -1088,20 +1085,12 @@ export default function App() {
     setErrorNotification(null);
 
     try {
-      // ── Smart spacing: delay only when approaching rate limit ──
-      // - If usage is low (0-2/5): minimal delay (10s)
-      // - If usage is medium (3/5): moderate delay (1 min)
-      // - If usage is high (4/5): full 3-min delay (proactive switch should handle this)
+      // ── Universal 3-min spacing before every request ──
       const now = Date.now();
       const elapsed = now - lastGenerationTime.current;
-      const { usage, limit, resetSecs } = currentKeyUsage;
-      const targetSpacingMs =
-        usage >= limit - 1 ? GENERATION_SPACING_MS :           // 4/5 -> 3 min
-        usage >= limit - 2 ? 60 * 1000 :                       // 3/5 -> 1 min
-        MIN_SPACING_MS;                                        // 0-2/5 -> 10s
-      const waitMs = Math.max(0, targetSpacingMs - elapsed);
+      const waitMs = Math.max(0, GENERATION_SPACING_MS - elapsed);
 
-      if (waitMs > MIN_SPACING_MS) {
+      if (waitMs > 0) {
         let remaining = Math.ceil(waitMs / 1000);
         setQueueCountdown(remaining);
         const countdownInterval = setInterval(() => {
@@ -1112,8 +1101,6 @@ export default function App() {
         await sleep(waitMs);
         clearInterval(countdownInterval);
         setQueueCountdown(0);
-      } else if (waitMs > 0) {
-        await sleep(waitMs); // Short gap, no countdown shown
       }
 
       lastGenerationTime.current = Date.now();
@@ -1813,20 +1800,14 @@ export default function App() {
             <section className="flex-1 flex flex-col min-w-0 bg-[#121317] border-r border-[#454933]/20 relative">
               {/* Notification Banners */}
 
-              {/* Queue countdown — smart spacing based on API usage */}
+              {/* Queue countdown — 3 min universal delay */}
               {queueCountdown > 0 && (
                 <div className="mx-4 mt-4 bg-[#d1f025]/10 border border-[#d1f025]/30 text-[#d1f025] rounded-xl p-3 flex items-center justify-between animate-fade-in z-20">
                   <div className="flex gap-3 items-center">
                     <div className="w-8 h-8 rounded-full border-2 border-[#d1f025]/40 border-t-[#d1f025] animate-spin flex-shrink-0" />
                     <div>
                       <p className="text-xs font-black tracking-wide">ENVIANDO EN {Math.floor(queueCountdown / 60)}:{String(queueCountdown % 60).padStart(2, '0')}</p>
-                      <p className="text-[10px] text-[#d1f025]/60 mt-0.5">
-                        {currentKeyUsage.usage >= currentKeyUsage.limit - 1
-                          ? `Espera de seguridad (${currentKeyUsage.usage}/${currentKeyUsage.limit} usados · cambiando key)`
-                          : currentKeyUsage.usage >= currentKeyUsage.limit - 2
-                          ? `Moderando velocidad (${currentKeyUsage.usage}/${currentKeyUsage.limit} usados)`
-                          : 'Separación mínima entre requests'}
-                      </p>
+                      <p className="text-[10px] text-[#d1f025]/60 mt-0.5">3 min entre videos · sin bloqueos</p>
                     </div>
                   </div>
                   <div className="text-right">
