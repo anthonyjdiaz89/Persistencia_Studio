@@ -2343,6 +2343,7 @@ export default function App() {
                   props={props}
                   locations={locations}
                   referenceFrames={referenceFrames}
+                  tasks={tasks}
                   onLoadClipConfig={handleLoadClipConfig}
                   onRenderClip={handleRenderClip}
                   onRenderScene={handleRenderScene}

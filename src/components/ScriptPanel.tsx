@@ -12,12 +12,12 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { CharacterAsset, PropAsset, LocationAsset, ReferenceFrameAsset } from "../types";
+import { CharacterAsset, PropAsset, LocationAsset, ReferenceFrameAsset, VideoTask } from "../types";
 import { uploadImageToSupabase } from "../lib/firebase";
 import {
   Plus, Trash2, Play, PlayCircle, ChevronDown, ChevronRight,
   Film, Clapperboard, Loader2, Download, Upload, Copy, Check,
-  AtSign, Settings2, SkipForward, Edit3, Image, BookOpen, RefreshCw, X,
+  AtSign, Settings2, SkipForward, Edit3, Image, BookOpen, RefreshCw, X, Video, Link,
 } from "lucide-react";
 import { ClipBlueprint, SceneBlueprint } from "./AIDirectorPanel";
 import { EPISODES } from "../data/episodeScripts";
@@ -51,6 +51,7 @@ interface ScriptPanelProps {
   props: PropAsset[];
   locations: LocationAsset[];
   referenceFrames?: ReferenceFrameAsset[];
+  tasks?: VideoTask[]; // History of generated videos for continuity selection
   onLoadClipConfig: (clip: ClipBlueprint) => void;
   onRenderClip: (clip: ClipBlueprint, parentBlueprint?: SceneBlueprint, customResolution?: "720p"|"1080p") => void;
   onRenderScene: (blueprint: SceneBlueprint, customResolution?: "720p"|"1080p") => void;
@@ -60,7 +61,7 @@ interface ScriptPanelProps {
 }
 
 export default function ScriptPanel({
-  characters, props, locations,
+  characters, props, locations, tasks = [],
   onLoadClipConfig, onRenderClip, onRenderScene, onRenderSceneSequentially,
   isSequentiallyRendering=false, sequentialRenderProgress=null,
 }: ScriptPanelProps) {
@@ -121,11 +122,15 @@ export default function ScriptPanel({
 
   /* ── Render with ref image injection ───────────── */
   const renderClip=(clip:ClipBlueprint,scene:SceneBlueprint,ci:number)=>{
-    if(ci===0&&scene.referenceImageUrl){
-      onRenderClip({...clip,image_urls:[scene.referenceImageUrl,...(clip.image_urls||[])].slice(0,5)},scene,renderRes);
-    } else {
-      onRenderClip(clip,scene,renderRes);
-    }
+    // Build the clip with reference image (first clip of block) + continuity video
+    const withRef = (ci===0&&scene.referenceImageUrl)
+      ? {...clip, image_urls:[scene.referenceImageUrl,...(clip.image_urls||[])].slice(0,5)}
+      : clip;
+    // Include video_url for continuity if set on the clip
+    const withVideo = withRef.video_url
+      ? {...withRef, video_urls:[withRef.video_url]}
+      : withRef;
+    onRenderClip(withVideo, scene, renderRes);
   };
 
   /* ── Copy / Export / Import ─────────────────────── */
@@ -219,6 +224,7 @@ export default function ScriptPanel({
             isExpanded={!!expandedScenes[si]}
             expandedClips={expandedClips} expandedCamera={expandedCamera}
             characters={characters} props={props} locations={locations}
+            tasks={tasks}
             renderRes={renderRes} copiedId={copiedId}
             isSequentiallyRendering={isSequentiallyRendering}
             isUploadingRef={uploadingRef===si}
@@ -257,6 +263,7 @@ interface SceneCardProps {
   scene: SceneBlueprint; sceneIndex: number; isExpanded: boolean;
   expandedClips: Record<string,boolean>; expandedCamera: Record<string,boolean>;
   characters: CharacterAsset[]; props: PropAsset[]; locations: LocationAsset[];
+  tasks: VideoTask[];
   renderRes: string; copiedId: string|null; isSequentiallyRendering: boolean; isUploadingRef: boolean;
   onToggleScene():void; onToggleClip(k:string):void; onToggleCamera(k:string):void;
   onUpdateTitle(t:string):void; onDeleteScene():void; onAddClip():void;
@@ -271,7 +278,7 @@ interface SceneCardProps {
 
 function SceneCard({
   scene,sceneIndex,isExpanded,expandedClips,expandedCamera,
-  characters,props,locations,renderRes,copiedId,isSequentiallyRendering,isUploadingRef,
+  characters,props,locations,tasks,renderRes,copiedId,isSequentiallyRendering,isUploadingRef,
   onToggleScene,onToggleClip,onToggleCamera,onUpdateTitle,onDeleteScene,onAddClip,
   onDeleteClip,onDuplicateClip,onUpdateClipField,onUpdateClipCamera,
   onInsertMention,onCopyPrompt,onLoadClip,onRenderClip,
@@ -330,6 +337,7 @@ function SceneCard({
               isFirstClip={ci===0} hasSceneRef={!!scene.referenceImageUrl}
               isExpanded={!!expandedClips[ck]} isCameraExpanded={!!expandedCamera[camk]}
               characters={characters} props={props} locations={locations} copiedId={copiedId}
+              tasks={tasks}
               onToggle={()=>onToggleClip(ck)} onToggleCamera={()=>onToggleCamera(camk)}
               onDelete={()=>onDeleteClip(ci)} onDuplicate={()=>onDuplicateClip(ci)}
               onUpdateField={(f,v)=>onUpdateClipField(ci,f,v)}
@@ -374,6 +382,7 @@ interface ClipCardProps {
   isFirstClip: boolean; hasSceneRef: boolean;
   isExpanded: boolean; isCameraExpanded: boolean;
   characters: CharacterAsset[]; props: PropAsset[]; locations: LocationAsset[];
+  tasks: VideoTask[];
   copiedId: string|null;
   onToggle():void; onToggleCamera():void; onDelete():void; onDuplicate():void;
   onUpdateField(f:keyof ClipBlueprint,v:any):void;
@@ -383,10 +392,12 @@ interface ClipCardProps {
 
 function ClipCard({
   clip,clipKey,clipIndex,isFirstClip,hasSceneRef,
-  isExpanded,isCameraExpanded,characters,props,locations,copiedId,
+  isExpanded,isCameraExpanded,characters,props,locations,tasks,copiedId,
   onToggle,onToggleCamera,onDelete,onDuplicate,
   onUpdateField,onUpdateCamera,onInsertMention,onCopy,onLoad,onRender,
 }: ClipCardProps) {
+  const [showVideoSelector, setShowVideoSelector] = useState(false);
+  const completedVideos = tasks.filter(t => t.status === 'completed' && t.data?.results?.[0]);
   const assets=[
     ...characters.map(c=>({label:`@${c.name}`,handle:`@${c.name}`,type:"char"})),
     ...props.map(p=>({label:`@${p.name}`,handle:`@${p.name}`,type:"prop"})),
@@ -459,6 +470,54 @@ function ClipCard({
             </div>
             <span className="text-[10px] text-gray-400">Audio</span>
           </label>
+
+          {/* Continuidad: seleccionar video anterior como referencia */}
+          <div className="border border-white/8 rounded-lg overflow-hidden">
+            <button
+              onClick={()=>setShowVideoSelector(v=>!v)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-white/5 transition-colors"
+            >
+              <Video className={`w-3 h-3 flex-shrink-0 ${clip.video_url?"text-cyan-400":"text-gray-600"}`}/>
+              <span className={`flex-1 text-left truncate ${clip.video_url?"text-cyan-400":"text-gray-500"}`}>
+                {clip.video_url ? "Continuidad: video seleccionado ✓" : "Continuidad: elegir video anterior"}
+              </span>
+              {clip.video_url && (
+                <button onClick={e=>{e.stopPropagation();onUpdateField("video_url","");}} className="text-gray-600 hover:text-red-400 flex-shrink-0">
+                  <X className="w-3 h-3"/>
+                </button>
+              )}
+              {showVideoSelector?<ChevronDown className="w-3 h-3 text-gray-600"/>:<ChevronRight className="w-3 h-3 text-gray-600"/>}
+            </button>
+
+            {showVideoSelector && (
+              <div className="border-t border-white/8 bg-[#0e0f12] max-h-40 overflow-y-auto">
+                {completedVideos.length === 0 ? (
+                  <p className="text-[9px] text-gray-600 px-2 py-2">No hay videos completados en el historial</p>
+                ) : (
+                  completedVideos.slice(0,15).map(task=>{
+                    const videoUrl = task.data?.results?.[0];
+                    const isSelected = clip.video_url === videoUrl;
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={()=>{ onUpdateField("video_url", isSelected ? "" : videoUrl); setShowVideoSelector(false); }}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors ${isSelected?"bg-cyan-400/10":""}`}
+                      >
+                        <Video className={`w-3 h-3 flex-shrink-0 ${isSelected?"text-cyan-400":"text-gray-600"}`}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[9px] text-gray-300 truncate">
+                            {task.sceneTitle ? `${task.sceneTitle} · Shot ${task.clipNumber}` : task.id.slice(0,12)+'...'}
+                          </p>
+                          <p className="text-[8px] text-gray-600">{new Date(task.created_at*1000).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</p>
+                        </div>
+                        {isSelected && <Check className="w-3 h-3 text-cyan-400 flex-shrink-0"/>}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
 
           <div>
             <button onClick={onToggleCamera} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300">

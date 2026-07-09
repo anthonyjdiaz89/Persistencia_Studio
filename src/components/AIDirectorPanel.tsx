@@ -51,6 +51,7 @@ export interface ClipBlueprint {
   generate_audio: boolean;
   consistencyExplanation: string;
   image_urls?: string[];
+  video_url?: string; // Reference video for continuity (last frame context)
 }
 
 export interface SceneBlueprint {
