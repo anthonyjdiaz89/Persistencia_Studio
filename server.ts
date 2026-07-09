@@ -1264,7 +1264,6 @@ JSON Schema:
     const waitSec = Math.max(0, Math.ceil((soonestReset.rateLimitResetTime - now) / 1000));
     console.log(`[Multi-Key System] ⏳ All keys blocked. Soonest reset: ${soonestReset.alias} in ${Math.ceil(waitSec/60)} min. NOT retrying (API penalizes retries).`);
     return null;
-    return soonestReset;
   };
 
   // Mark a key as rate-limited using EXACT reset_time from the API (persistent)
@@ -1272,14 +1271,15 @@ JSON Schema:
     const keyInfo = apiKeys.find(k => k.key === keyString);
     if (keyInfo) {
       keyInfo.isAvailable = false;
-      keyInfo.apiResetTimeStr = resetTimeStr; // Store the API's reset_time string for display
-      // Use API's exact reset_time if provided (most accurate), else calculate
+      keyInfo.apiResetTimeStr = resetTimeStr;
       if (resetTimeStr) {
         keyInfo.rateLimitResetTime = new Date(resetTimeStr.replace(' ', 'T') + 'Z').getTime();
       } else {
         keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
       }
-      keyInfo.currentUsage = keyInfo.limit;
+      // DO NOT overwrite currentUsage — keep the real value from the last API response
+      // (e.g. if proactive switch at 4/5, show 4, not 5)
+      // keyInfo.currentUsage is already set from the rate_limit response
 
       const secsLeft = Math.ceil((keyInfo.rateLimitResetTime - Date.now()) / 1000);
       const resetAt = new Date(keyInfo.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });

@@ -579,15 +579,6 @@ export default function App() {
         const data = await res.json();
         if (data.success) {
           setMultiKeyStatus(data);
-          // Update current key usage for smart spacing
-          const activeKey = data.keys?.find((k: any) => k.isCurrentActive);
-          if (activeKey) {
-            setCurrentKeyUsage({
-              usage: activeKey.currentUsage || 0,
-              limit: activeKey.limit || 5,
-              resetSecs: activeKey.resetInSeconds || 900
-            });
-          }
         }
       }
     } catch (err) {
@@ -1386,17 +1377,29 @@ export default function App() {
     // If the clip has a manually selected continuity video (from ScriptPanel), use it
     const manualVideoUrl = (clip as any).video_urls?.[0] || null;
     const effectiveVideoUrl = manualVideoUrl || previousClipVideoUrl;
-    const isSpanishPrompt = /[áéíóúñ¿¡]/.test(clip.prompt) || clip.prompt.toLowerCase().includes(' en ') || clip.prompt.toLowerCase().includes(' de ');
+    const promptLower = clip.prompt.toLowerCase();
+    const isSpanishPrompt = /[áéíóúñ¿¡]/.test(clip.prompt) || promptLower.includes(' en ') || promptLower.includes(' de ');
+
+    // Detect if @Isla / island location is mentioned in the prompt
+    const mentionsIsla = promptLower.includes('@isla') || promptLower.includes('isla') || promptLower.includes('island');
+
+    // Island design anchor — injected when continuity video + @Isla to prevent visual drift
+    // The model tends to "forget" the island's design when focusing on continuity from video
+    const islaAnchor = (effectiveVideoUrl && mentionsIsla)
+      ? (isSpanishPrompt
+          ? "[🏝️ ANCLAJE VISUAL DE LOCACIÓN: La isla SIEMPRE debe ser exactamente: isla tropical pequeña ~50m diámetro, playa arena blanca, agua turquesa cristalina, palmeras 8-10m altura, muelle de madera 15m, cabaña rústica con puerta 2m (más alta que Tomás), rocas volcánicas. PROHIBIDO cambiar la cabaña, el muelle, la playa o cualquier elemento estructural de la isla entre planos.] "
+          : "[🏝️ LOCATION VISUAL ANCHOR: The island MUST always be exactly: small tropical island ~50m diameter, white sand beach, crystal turquoise water, palm trees 8-10m tall, 15m wooden dock, rustic cabin with 2m door (taller than Tomás), volcanic rocks. FORBIDDEN to change the cabin, dock, beach or any structural island element between shots.] ")
+      : "";
 
     // Add video reference instruction to prompt when continuity video is used
     const videoInstruction = effectiveVideoUrl
       ? (isSpanishPrompt
-          ? "[🎬 CONTINUIDAD: Usa el video de referencia [Video1] como contexto visual. Mantén exactamente los mismos personajes, vestuario, iluminación, escenario y estilo visual del video anterior. Esta escena es la continuación temporal directa del plano anterior.]  "
-          : "[🎬 CONTINUITY: Use reference video [Video1] as visual context. Maintain exactly the same characters, costumes, lighting, setting and visual style from the previous video. This scene is the direct temporal continuation of the previous shot.]  ")
+          ? "[🎬 CONTINUIDAD: Usa el video de referencia [Video1] como contexto visual. Mantén exactamente los mismos personajes, vestuario, iluminación, estilo visual y arquitectura del video anterior. Esta escena es la continuación temporal directa del plano anterior.]  "
+          : "[🎬 CONTINUITY: Use reference video [Video1] as visual context. Maintain exactly the same characters, costumes, lighting, visual style and architecture from the previous video. This scene is the direct temporal continuation of the previous shot.]  ")
       : "";
 
     const { compiled: compiledPrompt } = compileFinalPrompt(
-      videoInstruction + clip.prompt,
+      islaAnchor + videoInstruction + clip.prompt,
       characters,
       props,
       locations,
