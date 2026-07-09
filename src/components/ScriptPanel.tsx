@@ -397,6 +397,9 @@ function ClipCard({
   onUpdateField,onUpdateCamera,onInsertMention,onCopy,onLoad,onRender,
 }: ClipCardProps) {
   const [showVideoSelector, setShowVideoSelector] = useState(false);
+  const [videoUrlInput, setVideoUrlInput] = useState("");
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const videoFileRef = useRef<HTMLInputElement>(null);
   const completedVideos = tasks.filter(t => t.status === 'completed' && t.data?.results?.[0]);
   const assets=[
     ...characters.map(c=>({label:`@${c.name}`,handle:`@${c.name}`,type:"char"})),
@@ -471,7 +474,7 @@ function ClipCard({
             <span className="text-[10px] text-gray-400">Audio</span>
           </label>
 
-          {/* Continuidad: seleccionar video anterior como referencia */}
+          {/* Continuidad: video de referencia propio o del historial */}
           <div className="border border-white/8 rounded-lg overflow-hidden">
             <button
               onClick={()=>setShowVideoSelector(v=>!v)}
@@ -479,10 +482,10 @@ function ClipCard({
             >
               <Video className={`w-3 h-3 flex-shrink-0 ${clip.video_url?"text-cyan-400":"text-gray-600"}`}/>
               <span className={`flex-1 text-left truncate ${clip.video_url?"text-cyan-400":"text-gray-500"}`}>
-                {clip.video_url ? "Continuidad: video seleccionado ✓" : "Continuidad: elegir video anterior"}
+                {clip.video_url ? "Video de referencia seleccionado ✓" : "Video de referencia (drone, plano prev.)"}
               </span>
               {clip.video_url && (
-                <button onClick={e=>{e.stopPropagation();onUpdateField("video_url","");}} className="text-gray-600 hover:text-red-400 flex-shrink-0">
+                <button onClick={e=>{e.stopPropagation();onUpdateField("video_url","");setVideoUrlInput("");}} className="text-gray-600 hover:text-red-400 flex-shrink-0">
                   <X className="w-3 h-3"/>
                 </button>
               )}
@@ -490,30 +493,86 @@ function ClipCard({
             </button>
 
             {showVideoSelector && (
-              <div className="border-t border-white/8 bg-[#0e0f12] max-h-40 overflow-y-auto">
-                {completedVideos.length === 0 ? (
-                  <p className="text-[9px] text-gray-600 px-2 py-2">No hay videos completados en el historial</p>
-                ) : (
-                  completedVideos.slice(0,15).map(task=>{
-                    const videoUrl = task.data?.results?.[0];
-                    const isSelected = clip.video_url === videoUrl;
-                    return (
-                      <button
-                        key={task.id}
-                        onClick={()=>{ onUpdateField("video_url", isSelected ? "" : videoUrl); setShowVideoSelector(false); }}
-                        className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors ${isSelected?"bg-cyan-400/10":""}`}
-                      >
-                        <Video className={`w-3 h-3 flex-shrink-0 ${isSelected?"text-cyan-400":"text-gray-600"}`}/>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[9px] text-gray-300 truncate">
-                            {task.sceneTitle ? `${task.sceneTitle} · Shot ${task.clipNumber}` : task.id.slice(0,12)+'...'}
-                          </p>
-                          <p className="text-[8px] text-gray-600">{new Date(task.created_at*1000).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</p>
-                        </div>
-                        {isSelected && <Check className="w-3 h-3 text-cyan-400 flex-shrink-0"/>}
-                      </button>
-                    );
-                  })
+              <div className="border-t border-white/8 bg-[#0e0f12]">
+                {/* Option 1: Paste URL */}
+                <div className="px-2 pt-2 pb-1">
+                  <p className="text-[9px] text-gray-500 mb-1">Pegar URL de video:</p>
+                  <div className="flex gap-1">
+                    <input
+                      value={videoUrlInput}
+                      onChange={e=>setVideoUrlInput(e.target.value)}
+                      placeholder="https://... o URL de Supabase"
+                      className="flex-1 text-[9px] bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white placeholder-gray-600 focus:outline-none focus:border-cyan-400/40"
+                    />
+                    <button
+                      onClick={()=>{
+                        if(videoUrlInput.trim()){
+                          onUpdateField("video_url", videoUrlInput.trim());
+                          setShowVideoSelector(false);
+                          setVideoUrlInput("");
+                        }
+                      }}
+                      disabled={!videoUrlInput.trim()}
+                      className="text-[9px] px-2 py-1 bg-cyan-400/10 text-cyan-400 rounded hover:bg-cyan-400/20 disabled:opacity-30 transition-colors"
+                    >
+                      Usar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option 2: Upload video file */}
+                <div className="px-2 pb-2">
+                  <input
+                    ref={videoFileRef}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={async (e)=>{
+                      const file = e.target.files?.[0];
+                      if(!file) return;
+                      setIsUploadingVideo(true);
+                      try {
+                        const url = await uploadImageToSupabase(file, "video-assets", "reference-videos");
+                        onUpdateField("video_url", url);
+                        setShowVideoSelector(false);
+                      } catch(err){ console.error("Video upload error:", err); }
+                      finally{ setIsUploadingVideo(false); e.target.value=""; }
+                    }}
+                  />
+                  <button
+                    onClick={()=>videoFileRef.current?.click()}
+                    disabled={isUploadingVideo}
+                    className="w-full flex items-center justify-center gap-1.5 text-[9px] py-1 border border-dashed border-cyan-400/20 text-cyan-400/60 hover:text-cyan-400 hover:border-cyan-400/40 rounded transition-all"
+                  >
+                    {isUploadingVideo ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
+                    {isUploadingVideo ? "Subiendo video..." : "Subir video de referencia (drone, plano propio)"}
+                  </button>
+                </div>
+
+                {/* Option 3: From history */}
+                {completedVideos.length > 0 && (
+                  <div className="border-t border-white/8 max-h-32 overflow-y-auto">
+                    <p className="text-[9px] text-gray-600 px-2 pt-1.5 pb-0.5">Del historial generado:</p>
+                    {completedVideos.slice(0,10).map(task=>{
+                      const videoUrl = task.data?.results?.[0];
+                      const isSelected = clip.video_url === videoUrl;
+                      return (
+                        <button
+                          key={task.id}
+                          onClick={()=>{ onUpdateField("video_url", isSelected ? "" : videoUrl); setShowVideoSelector(false); }}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors ${isSelected?"bg-cyan-400/10":""}`}
+                        >
+                          <Video className={`w-3 h-3 flex-shrink-0 ${isSelected?"text-cyan-400":"text-gray-600"}`}/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] text-gray-300 truncate">
+                              {task.sceneTitle ? `${task.sceneTitle} · Shot ${task.clipNumber}` : task.id.slice(0,12)+'...'}
+                            </p>
+                          </div>
+                          {isSelected && <Check className="w-3 h-3 text-cyan-400 flex-shrink-0"/>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
