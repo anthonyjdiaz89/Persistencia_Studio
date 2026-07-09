@@ -1251,7 +1251,7 @@ JSON Schema:
     const firstAvailable = apiKeys.find(k => k.isAvailable);
     if (firstAvailable) {
       console.log(`[Multi-Key System] Selected ${firstAvailable.alias} (${firstAvailable.currentUsage}/${firstAvailable.limit} used) [drain-first strategy]`);
-      currentActiveKeyAlias = firstAvailable.alias; // Track which key is active
+      currentActiveKeyAlias = firstAvailable.alias;
       return firstAvailable;
     }
     
@@ -1798,6 +1798,24 @@ JSON Schema:
       if (usedKeyInfo) {
         usedKeyInfo.currentUsage = Math.min((usedKeyInfo.currentUsage || 0) + 1, usedKeyInfo.limit);
         usedKeyInfo.dailyVideosGenerated++;
+        // Proactive switch by our OWN request count (fallback when API doesn't include rate_limit)
+        // If we've sent PROACTIVE_THRESHOLD requests, mark key before the API blocks us
+        const PROACTIVE_THRESHOLD = usedKeyInfo.limit - 1; // 4 when limit is 5
+        if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && !usedKeyInfo.apiResetTimeStr) {
+          // We don't have a reset_time from the API yet — estimate 15 min window from first use
+          const estimatedReset = Date.now() + (15 * 60 * 1000); // fallback: 15 min from now
+          usedKeyInfo.isAvailable = false;
+          usedKeyInfo.rateLimitResetTime = estimatedReset;
+          console.log(`[Multi-Key System] 🔄 Proactive switch by request count at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (estimated reset in 15min)`);
+        } else if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && usedKeyInfo.apiResetTimeStr) {
+          // We have the exact reset_time from the API — use it
+          const exactReset = new Date(usedKeyInfo.apiResetTimeStr.replace(' ', 'T') + 'Z').getTime();
+          if (exactReset > Date.now()) {
+            usedKeyInfo.isAvailable = false;
+            usedKeyInfo.rateLimitResetTime = exactReset;
+            console.log(`[Multi-Key System] 🔄 Proactive switch at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (exact API reset: ${usedKeyInfo.apiResetTimeStr})`);
+          }
+        }
         saveKeyStates();
         console.log(`[Multi-Key System] 📹 ${usedKeyInfo.alias} uso=${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} | Task: ${taskId}`);
       }
