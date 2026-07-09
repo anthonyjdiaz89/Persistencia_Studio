@@ -1580,11 +1580,14 @@ JSON Schema:
         const limit = responseData.rate_limit.limit || 5;
         const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 0;
         updateKeyUsage(apiKey, usage, limit);
-        console.log(`[Rate Monitor] ${apiKeys.find(k=>k.key===apiKey)?.alias}: ${usage}/${limit} used, resets in ${secondsUntilReset}s`);
-        // Proactive switch: if at limit, mark as rate-limited NOW before next request
-        if (typeof limit === 'number' && usage >= limit && secondsUntilReset > 0) {
+        console.log(`[Rate Monitor] ${apiKeys.find(k=>k.key===apiKey)?.alias}: ${usage}/${limit} used | reset in ${secondsUntilReset}s (${responseData.rate_limit.reset_time})`);
+        // Proactive switch at 4/5 — never send the 5th request that triggers a 429
+        // At 4/5: mark key, rotate to next. Key will reset in ~seconds_until_reset.
+        const PROACTIVE_THRESHOLD = limit - 1; // switch at 4 when limit is 5
+        if (typeof limit === 'number' && usage >= PROACTIVE_THRESHOLD && secondsUntilReset > 0) {
           markKeyAsRateLimited(apiKey, secondsUntilReset, responseData.rate_limit.reset_time);
-          console.log(`[Rate Monitor] ⚠️ Proactively blocking key — at limit ${usage}/${limit}`);
+          saveKeyStates();
+          console.log(`[Rate Monitor] 🔄 Proactively switching key at ${usage}/${limit} (threshold ${PROACTIVE_THRESHOLD}) — avoiding 5th request`);
         }
       }
 
