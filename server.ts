@@ -417,23 +417,30 @@ async function startServer() {
         k.isAvailable = true; k.currentUsage = 0; k.rateLimitResetTime = 0; k.apiResetTimeStr = undefined;
       }
     });
-    const keysStatus = apiKeys.map((keyInfo, idx) => ({
-      index: idx + 1,
-      alias: keyInfo.alias,
-      keyPreview: `${keyInfo.key.substring(0, 15)}...${keyInfo.key.substring(keyInfo.key.length - 4)}`,
-      isAvailable: keyInfo.isAvailable,
-      isCurrentActive: currentActiveKeyAlias === keyInfo.alias, // NEW: which key is actively being used
-      currentUsage: keyInfo.currentUsage,
-      limit: keyInfo.limit,
-      resetInSeconds: keyInfo.rateLimitResetTime > now 
-        ? Math.ceil((keyInfo.rateLimitResetTime - now) / 1000) 
-        : 0,
-      resetTime: keyInfo.apiResetTimeStr || (keyInfo.rateLimitResetTime > 0 
-        ? new Date(keyInfo.rateLimitResetTime).toISOString() 
-        : null),
-      apiTodayCount: keyInfo.apiTodayCount,
-      apiTotalCount: keyInfo.apiTotalCount,
-    }));
+    const keysStatus = apiKeys.map((keyInfo, idx) => {
+      // Show as active: the key currently in use, OR (if no generation yet) the first available key
+      const firstAvailableAlias = apiKeys.find(k => k.isAvailable)?.alias;
+      const isActive = currentActiveKeyAlias 
+        ? currentActiveKeyAlias === keyInfo.alias
+        : firstAvailableAlias === keyInfo.alias; // Before first use, highlight first available
+      return {
+        index: idx + 1,
+        alias: keyInfo.alias,
+        keyPreview: `${keyInfo.key.substring(0, 15)}...${keyInfo.key.substring(keyInfo.key.length - 4)}`,
+        isAvailable: keyInfo.isAvailable,
+        isCurrentActive: isActive,
+        currentUsage: keyInfo.currentUsage,
+        limit: keyInfo.limit,
+        resetInSeconds: keyInfo.rateLimitResetTime > now 
+          ? Math.ceil((keyInfo.rateLimitResetTime - now) / 1000) 
+          : 0,
+        resetTime: keyInfo.apiResetTimeStr || (keyInfo.rateLimitResetTime > 0 
+          ? new Date(keyInfo.rateLimitResetTime).toISOString() 
+          : null),
+        apiTodayCount: keyInfo.apiTodayCount,
+        apiTotalCount: keyInfo.apiTotalCount,
+      };
+    });
     
     const availableCount = keysStatus.filter(k => k.isAvailable).length;
     res.json({

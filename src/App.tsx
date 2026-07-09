@@ -1375,17 +1375,29 @@ export default function App() {
       }
     }
 
+    // If the clip has a manually selected continuity video (from ScriptPanel), use it
+    const manualVideoUrl = (clip as any).video_urls?.[0] || null;
+    const effectiveVideoUrl = manualVideoUrl || previousClipVideoUrl;
+    const isSpanishPrompt = /[áéíóúñ¿¡]/.test(clip.prompt) || clip.prompt.toLowerCase().includes(' en ') || clip.prompt.toLowerCase().includes(' de ');
+
+    // Add video reference instruction to prompt when continuity video is used
+    const videoInstruction = effectiveVideoUrl
+      ? (isSpanishPrompt
+          ? "[🎬 CONTINUIDAD: Usa el video de referencia [Video1] como contexto visual. Mantén exactamente los mismos personajes, vestuario, iluminación, escenario y estilo visual del video anterior. Esta escena es la continuación temporal directa del plano anterior.]  "
+          : "[🎬 CONTINUITY: Use reference video [Video1] as visual context. Maintain exactly the same characters, costumes, lighting, setting and visual style from the previous video. This scene is the direct temporal continuation of the previous shot.]  ")
+      : "";
+
     const { compiled: compiledPrompt } = compileFinalPrompt(
-      clip.prompt,
+      videoInstruction + clip.prompt,
       characters,
       props,
       locations,
       clip.cameraSettings as any,
       selectedRefImages,
-      !!previousClipVideoUrl
+      !!effectiveVideoUrl
     );
 
-    const finalGenType: GenerationMode = (selectedRefImages.length > 0 || previousClipVideoUrl)
+    const finalGenType: GenerationMode = (selectedRefImages.length > 0 || effectiveVideoUrl)
       ? "reference-to-video"
       : "text-to-video";
 
@@ -1401,7 +1413,7 @@ export default function App() {
       return_last_frame: false,
       seed: -1,
       ...(selectedRefImages.length > 0 ? { image_urls: selectedRefImages.slice(0, 9) } : {}),
-      ...(previousClipVideoUrl ? { video_urls: [previousClipVideoUrl] } : {})
+      ...(effectiveVideoUrl ? { video_urls: [effectiveVideoUrl] } : {})
     };
 
     await handleGenerateVideo(inputPayload, model, parentBlueprint?.sceneTitle, clip.clipNumber);
