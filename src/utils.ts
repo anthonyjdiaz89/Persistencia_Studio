@@ -45,10 +45,10 @@ const CHARACTER_HEIGHTS: Record<string, string> = {
 
 // Location and prop scale proportions for the animated series
 const LOCATION_PROPORTIONS: Record<string, string> = {
-  "isla": "isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa cristalina, palmeras 8-10m, MUELLE DE MADERA RÚSTICO: tablones de madera desgastada color miel/marrón extendiéndose ~15m desde la orilla hacia el mar perpendicular a la playa con pilotes de madera fijados al fondo (DISEÑO FIJO: siempre igual en todos los planos), cabaña rústica pequeña de madera detrás de la playa puerta 2m altura (más alta que Tomás), rocas volcánicas negras en la orilla",
-  "island": "small tropical island approx 50m diameter, white sand beach, crystal turquoise water, palm trees 8-10m, RUSTIC WOODEN DOCK: weathered honey-brown wooden planks extending ~15m perpendicular from shore into sea with wooden posts in seabed (FIXED DESIGN: always identical across all shots), small rustic wooden cabin behind beach with 2m door (taller than Tomás), black volcanic rocks on shore",
-  "casa": "cabaña pequeña de madera rústica, puerta principal 2 metros de altura (más alta que Tomás)",
-  "house": "small rustic wooden cabin, main door is 2 meters tall (taller than Tomás)"
+  "isla": "isla tropical pequeña ~50m diámetro: playa arena blanca, agua turquesa cristalina con arrecife de coral visible en el fondo, palmeras tropicales altas, árboles frondosos verdes. MUELLE: tablones de madera marrón clara ~15m perpendicular desde la playa hacia el mar, con pilotes de madera y NEUMÁTICOS DE CAUCHO NEGROS COLGADOS en los pilotes como amortiguadores — este detalle es OBLIGATORIO siempre. BARCA AZUL pequeña amarrada junto al muelle. CABAÑA: pequeña cabaña rústica de madera oscura con techo a dos aguas, puerta grande de madera al frente. ESTRUCTURA AMARILLA: banco o mesón de trabajo de madera color amarillo/miel en la playa. ROCAS grises redondeadas en la orilla de la playa. TODOS estos elementos son FIJOS y se repiten IDÉNTICOS en cada plano.",
+  "island": "small tropical island ~50m diameter: white sand beach, crystal turquoise water with visible coral reef, tall palm trees, lush green tropical trees. DOCK: light brown wooden planks ~15m perpendicular from beach into sea, wooden posts with BLACK RUBBER TIRES HANGING on posts as bumpers — this detail is MANDATORY always. SMALL BLUE BOAT moored next to dock. CABIN: small rustic wooden cabin with dark wood and peaked roof, large wooden front door. YELLOW WOODEN STRUCTURE: bench or work table in honey/yellow wood on the beach. ROUNDED GREY ROCKS on the shore. ALL these elements are FIXED and IDENTICAL in every shot.",
+  "casa": "cabaña pequeña de madera oscura rústica con techo a dos aguas, puerta grande de madera al frente",
+  "house": "small rustic dark wooden cabin with peaked roof, large wooden front door"
 };
 
 // Base animated series visual style - ALWAYS applied
