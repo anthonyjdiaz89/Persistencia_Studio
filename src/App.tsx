@@ -1850,6 +1850,18 @@ export default function App() {
                       <button
                         onClick={async () => {
                           try {
+                            await fetch(`${API_BASE_URL}/api/keys/sync`, { method: 'POST' });
+                            await fetchMultiKeyStatus();
+                          } catch {}
+                        }}
+                        className="text-[10px] text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded font-mono transition-colors"
+                        title="Sincronizar datos reales de videogenapi.com"
+                      >
+                        Sync
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
                             await fetch(`${API_BASE_URL}/api/keys/reset`, { method: 'POST' });
                             await fetchMultiKeyStatus();
                           } catch {}
@@ -1863,7 +1875,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {multiKeyStatus.keys.map((key) => (
+                    {multiKeyStatus.keys.map((key: any) => (
                       <div 
                         key={key.index} 
                         className={`p-2 rounded-lg border text-xs ${
@@ -1890,6 +1902,17 @@ export default function App() {
                             </span>
                           )}
                         </div>
+                        {/* Real stats from API */}
+                        {key.apiTodayCount !== undefined && (
+                          <div className="mt-1 text-[9px] text-gray-600 font-mono">
+                            hoy: {key.apiTodayCount} · total: {key.apiTotalCount ?? '?'}
+                          </div>
+                        )}
+                        {key.resetTime && !key.isAvailable && (
+                          <div className="mt-0.5 text-[9px] text-rose-400/70 font-mono truncate" title={key.resetTime}>
+                            reset: {key.resetTime?.substring(11,19) || key.resetTime}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

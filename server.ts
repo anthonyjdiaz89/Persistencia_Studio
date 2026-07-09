@@ -411,30 +411,59 @@ async function startServer() {
   // API Route: Multi-Key Status Monitor
   app.get("/api/keys/status", (req, res) => {
     const now = Date.now();
+    // Auto-reset keys whose timer has passed
+    apiKeys.forEach(k => {
+      if (!k.isAvailable && k.rateLimitResetTime > 0 && now >= k.rateLimitResetTime) {
+        k.isAvailable = true; k.currentUsage = 0; k.rateLimitResetTime = 0; k.apiResetTimeStr = undefined;
+      }
+    });
     const keysStatus = apiKeys.map((keyInfo, idx) => ({
       index: idx + 1,
       alias: keyInfo.alias,
       keyPreview: `${keyInfo.key.substring(0, 15)}...${keyInfo.key.substring(keyInfo.key.length - 4)}`,
-      isAvailable: keyInfo.isAvailable || now >= keyInfo.rateLimitResetTime,
+      isAvailable: keyInfo.isAvailable,
       currentUsage: keyInfo.currentUsage,
       limit: keyInfo.limit,
+      // Calculate from stored absolute reset_time (accurate across restarts)
       resetInSeconds: keyInfo.rateLimitResetTime > now 
         ? Math.ceil((keyInfo.rateLimitResetTime - now) / 1000) 
         : 0,
-      resetTime: keyInfo.rateLimitResetTime > 0 
+      resetTime: keyInfo.apiResetTimeStr || (keyInfo.rateLimitResetTime > 0 
         ? new Date(keyInfo.rateLimitResetTime).toISOString() 
-        : null
+        : null),
+      // Real stats from API
+      apiTodayCount: keyInfo.apiTodayCount,
+      apiTotalCount: keyInfo.apiTotalCount,
     }));
     
     const availableCount = keysStatus.filter(k => k.isAvailable).length;
-    
     res.json({
-      success: true,
-      totalKeys: apiKeys.length,
-      availableKeys: availableCount,
-      keys: keysStatus,
-      loadBalancingActive: apiKeys.length > 1
+      success: true, totalKeys: apiKeys.length, availableKeys: availableCount,
+      keys: keysStatus, loadBalancingActive: apiKeys.length > 1
     });
+  });
+
+  // API Route: Sync real stats from videogenapi.com /v1/user for each key
+  app.post("/api/keys/sync", async (_req, res) => {
+    const results: any[] = [];
+    for (const keyInfo of apiKeys) {
+      try {
+        const r = await fetch("https://videogenapi.com/api/v1/user", {
+          headers: { "Authorization": `Bearer ${keyInfo.key}` }
+        });
+        if (r.ok) {
+          const d = await r.json();
+          keyInfo.apiTodayCount = d.statistics?.today ?? keyInfo.apiTodayCount;
+          keyInfo.apiTotalCount = d.statistics?.total ?? keyInfo.apiTotalCount;
+          results.push({ alias: keyInfo.alias, today: keyInfo.apiTodayCount, total: keyInfo.apiTotalCount, plan: d.plan?.name });
+          console.log(`[KeySync] ${keyInfo.alias}: today=${keyInfo.apiTodayCount} total=${keyInfo.apiTotalCount} plan=${d.plan?.name}`);
+        } else {
+          results.push({ alias: keyInfo.alias, error: `HTTP ${r.status}` });
+        }
+      } catch(e:any) { results.push({ alias: keyInfo.alias, error: e.message }); }
+    }
+    saveKeyStates();
+    res.json({ success: true, synced: results });
   });
 
   // API Route: Force-reset all key states (clear timers, mark all available)
@@ -833,12 +862,16 @@ JSON Schema:
   interface ApiKeyInfo {
     key: string;
     alias: string;
-    rateLimitResetTime: number; // timestamp when rate limit resets
+    rateLimitResetTime: number; // absolute UTC ms when rate limit resets (from API reset_time)
     isAvailable: boolean;
     currentUsage: number;
     limit: number;
-    dailyVideosGenerated: number;  // Track usage in current 15-min window
-    dailyResetTime: number;        // When 15-min window resets
+    dailyVideosGenerated: number;
+    dailyResetTime: number;
+    // Real data from API responses (persisted)
+    apiResetTimeStr?: string;    // e.g. "2026-07-09 00:58:13" from rate_limit.reset_time
+    apiTodayCount?: number;      // from /v1/user statistics.today
+    apiTotalCount?: number;      // from /v1/user statistics.total
   }
 
   const apiKeys: ApiKeyInfo[] = [];
@@ -1074,9 +1107,12 @@ JSON Schema:
         alias: k.alias,
         keyPreview: k.key.substring(0, 15),
         isAvailable: k.isAvailable,
-        rateLimitResetTime: k.rateLimitResetTime,  // exact UTC ms from API
+        rateLimitResetTime: k.rateLimitResetTime,
         currentUsage: k.currentUsage,
-        limit: k.limit
+        limit: k.limit,
+        apiResetTimeStr: k.apiResetTimeStr,    // "2026-07-09 00:58:13" exact from API
+        apiTodayCount: k.apiTodayCount,        // from /v1/user today stats
+        apiTotalCount: k.apiTotalCount,        // from /v1/user total stats
       }));
       fs.writeFileSync(KEY_STATE_FILE, JSON.stringify(state, null, 2));
     } catch (e) { console.warn('[KeyState] Could not save state:', e); }
@@ -1090,15 +1126,19 @@ JSON Schema:
       saved.forEach(s => {
         const key = apiKeys.find(k => k.key.startsWith(s.keyPreview));
         if (!key) return;
-        // Only restore if reset time is still in the future
+        // Restore real stats from API (always)
+        if (s.apiTodayCount !== undefined) key.apiTodayCount = s.apiTodayCount;
+        if (s.apiTotalCount !== undefined) key.apiTotalCount = s.apiTotalCount;
+        if (s.apiResetTimeStr) key.apiResetTimeStr = s.apiResetTimeStr;
+        key.limit = s.limit ?? key.limit;
+        // Only restore rate limit block if still in the future
         if (s.rateLimitResetTime && s.rateLimitResetTime > now) {
           key.isAvailable = false;
           key.rateLimitResetTime = s.rateLimitResetTime;
           key.currentUsage = s.currentUsage ?? key.currentUsage;
-          key.limit = s.limit ?? key.limit;
           const secsLeft = Math.ceil((s.rateLimitResetTime - now) / 1000);
           const resetAt = new Date(s.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-          console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT)`);
+          console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT | API: ${s.apiResetTimeStr || 'n/a'})`);
         }
       });
       console.log('[KeyState] Estado cargado desde disco.');
@@ -1158,9 +1198,9 @@ JSON Schema:
     const keyInfo = apiKeys.find(k => k.key === keyString);
     if (keyInfo) {
       keyInfo.isAvailable = false;
+      keyInfo.apiResetTimeStr = resetTimeStr; // Store the API's reset_time string for display
       // Use API's exact reset_time if provided (most accurate), else calculate
       if (resetTimeStr) {
-        // reset_time from API is UTC: e.g. "2026-07-08 19:17:14"
         keyInfo.rateLimitResetTime = new Date(resetTimeStr.replace(' ', 'T') + 'Z').getTime();
       } else {
         keyInfo.rateLimitResetTime = Date.now() + (resetInSeconds * 1000);
@@ -1169,9 +1209,8 @@ JSON Schema:
 
       const secsLeft = Math.ceil((keyInfo.rateLimitResetTime - Date.now()) / 1000);
       const resetAt = new Date(keyInfo.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED ~${Math.ceil(secsLeft/60)} min | Reset: ${resetAt} COT | reset_time API: ${resetTimeStr || 'calculado'}`);
+      console.log(`[Multi-Key System] 🔴 ${keyInfo.alias} RATE-LIMITED ~${Math.ceil(secsLeft/60)} min | Reset: ${resetAt} COT | API reset_time: ${resetTimeStr || 'calculado'}`);
 
-      // Persist to disk — survives server restarts
       saveKeyStates();
     }
   };
@@ -1579,15 +1618,20 @@ JSON Schema:
         const usage = responseData.rate_limit.current_usage || 0;
         const limit = responseData.rate_limit.limit || 5;
         const secondsUntilReset = responseData.rate_limit.seconds_until_reset || 0;
+        const keyInfoForMonitor = apiKeys.find(k=>k.key===apiKey);
         updateKeyUsage(apiKey, usage, limit);
-        console.log(`[Rate Monitor] ${apiKeys.find(k=>k.key===apiKey)?.alias}: ${usage}/${limit} used | reset in ${secondsUntilReset}s (${responseData.rate_limit.reset_time})`);
+        // Persist the reset_time string from the API (for accurate display across restarts)
+        if (keyInfoForMonitor && responseData.rate_limit.reset_time) {
+          keyInfoForMonitor.apiResetTimeStr = responseData.rate_limit.reset_time;
+        }
+        console.log(`[Rate Monitor] ${keyInfoForMonitor?.alias}: ${usage}/${limit} used | reset at ${responseData.rate_limit.reset_time} (${secondsUntilReset}s)`);
         // Proactive switch at 4/5 — never send the 5th request that triggers a 429
-        // At 4/5: mark key, rotate to next. Key will reset in ~seconds_until_reset.
         const PROACTIVE_THRESHOLD = limit - 1; // switch at 4 when limit is 5
         if (typeof limit === 'number' && usage >= PROACTIVE_THRESHOLD && secondsUntilReset > 0) {
           markKeyAsRateLimited(apiKey, secondsUntilReset, responseData.rate_limit.reset_time);
-          saveKeyStates();
-          console.log(`[Rate Monitor] 🔄 Proactively switching key at ${usage}/${limit} (threshold ${PROACTIVE_THRESHOLD}) — avoiding 5th request`);
+          console.log(`[Rate Monitor] 🔄 Proactively switching key at ${usage}/${limit} (threshold ${PROACTIVE_THRESHOLD})`);
+        } else {
+          saveKeyStates(); // Save even on non-limit responses to persist usage count
         }
       }
 
