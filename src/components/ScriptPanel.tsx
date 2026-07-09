@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { CharacterAsset, PropAsset, LocationAsset, ReferenceFrameAsset, VideoTask } from "../types";
-import { uploadImageToSupabase } from "../lib/firebase";
+import { uploadImageToSupabase, uploadFileToSupabase } from "../lib/firebase";
 import {
   Plus, Trash2, Play, PlayCircle, ChevronDown, ChevronRight,
   Film, Clapperboard, Loader2, Download, Upload, Copy, Check,
@@ -495,17 +495,20 @@ function ClipCard({
             {showVideoSelector && (
               <div className="border-t border-white/8 bg-[#0e0f12]">
                 {/* Option 1: Paste URL */}
-                <div className="px-2 pt-2 pb-1">
+                <div className="px-2 pt-2 pb-1" onClick={e=>e.stopPropagation()}>
                   <p className="text-[9px] text-gray-500 mb-1">Pegar URL de video:</p>
                   <div className="flex gap-1">
                     <input
                       value={videoUrlInput}
                       onChange={e=>setVideoUrlInput(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter"&&videoUrlInput.trim()){onUpdateField("video_url",videoUrlInput.trim());setShowVideoSelector(false);setVideoUrlInput("");}e.stopPropagation();}}
+                      onClick={e=>e.stopPropagation()}
                       placeholder="https://... o URL de Supabase"
                       className="flex-1 text-[9px] bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white placeholder-gray-600 focus:outline-none focus:border-cyan-400/40"
                     />
                     <button
-                      onClick={()=>{
+                      onClick={e=>{
+                        e.stopPropagation();
                         if(videoUrlInput.trim()){
                           onUpdateField("video_url", videoUrlInput.trim());
                           setShowVideoSelector(false);
@@ -532,10 +535,13 @@ function ClipCard({
                       if(!file) return;
                       setIsUploadingVideo(true);
                       try {
-                        const url = await uploadImageToSupabase(file, "video-assets", "reference-videos");
+                        const url = await uploadFileToSupabase(file, "video-assets", "reference-videos");
                         onUpdateField("video_url", url);
                         setShowVideoSelector(false);
-                      } catch(err){ console.error("Video upload error:", err); }
+                      } catch(err){
+                        console.error("Video upload error:", err);
+                        alert("Error al subir video: " + (err instanceof Error ? err.message : String(err)));
+                      }
                       finally{ setIsUploadingVideo(false); e.target.value=""; }
                     }}
                   />

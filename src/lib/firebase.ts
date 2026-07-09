@@ -80,6 +80,35 @@ export async function uploadImageToSupabase(
 }
 
 /**
+ * Upload any file (video, audio, etc.) to Supabase Storage WITHOUT image processing
+ */
+export async function uploadFileToSupabase(
+  file: File,
+  bucketName: string = "video-assets",
+  folder: string = "uploads"
+): Promise<string> {
+  const config = await getSupabaseConfig();
+  const timestamp = Date.now();
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  const extension = file.name.split('.').pop() || 'bin';
+  const fileName = `${folder}/${timestamp}_${randomStr}.${extension}`;
+  const uploadUrl = `${config.url}/storage/v1/object/${bucketName}/${fileName}`;
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.anonKey}`,
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file
+  });
+  if (!uploadRes.ok) {
+    const errorText = await uploadRes.text();
+    throw new Error(`Upload failed: ${uploadRes.status} ${errorText}`);
+  }
+  return `${config.url}/storage/v1/object/public/${bucketName}/${fileName}`;
+}
+
+/**
  * Resize image file to max width while maintaining aspect ratio
  */
 function resizeImage(file: File, maxWidth: number = 1024): Promise<Blob> {
