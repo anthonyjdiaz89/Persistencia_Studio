@@ -1222,8 +1222,11 @@ JSON Schema:
           const resetAt = new Date(s.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
           console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT)`);
         } else {
-          // Window expired — restore usage count for display but mark available
-          key.currentUsage = s.currentUsage ?? key.currentUsage;
+          // Window expired or key never blocked — reset usage to 0.
+          // The API will report the real current_usage on the next request.
+          // DO NOT restore stale currentUsage: it causes "first video = 2" because
+          // the fallback increment fires on top of the restored value.
+          key.currentUsage = 0;
         }
         // Restore last active key (continuity across restarts)
         if (s.isCurrentActive) {
