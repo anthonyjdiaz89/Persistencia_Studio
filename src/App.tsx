@@ -1910,13 +1910,29 @@ export default function App() {
                             {isActive && <span className="w-2 h-2 rounded-full bg-[#d1f025] animate-pulse shadow-[0_0_6px_#d1f025]" title="Key actualmente en uso"/>}
                             <span className={`font-bold font-mono text-xs ${isActive ? 'text-[#d1f025]' : ''}`}>{key.alias}</span>
                           </div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                            isActive ? 'bg-[#d1f025]/20 text-[#d1f025] font-black' :
-                            isLimit ? 'bg-rose-500/20 text-rose-400' :
-                            'bg-emerald-500/20 text-emerald-400'
-                          }`}>
-                            {isActive ? '● ACTIVA' : isLimit ? 'LÍMITE' : 'EN ESPERA'}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {!isActive && key.isAvailable && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await fetch(`${API_BASE_URL}/api/keys/set-active`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({alias: key.alias}) });
+                                    await fetchMultiKeyStatus();
+                                  } catch {}
+                                }}
+                                className="text-[9px] text-gray-500 hover:text-[#d1f025] px-1 py-0.5 rounded hover:bg-[#d1f025]/10 transition-colors font-mono"
+                                title="Usar esta key como activa"
+                              >
+                                Usar
+                              </button>
+                            )}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                              isActive ? 'bg-[#d1f025]/20 text-[#d1f025] font-black' :
+                              isLimit ? 'bg-rose-500/20 text-rose-400' :
+                              'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {isActive ? '● ACTIVA' : isLimit ? 'LÍMITE' : 'EN ESPERA'}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
                           <span>{key.currentUsage}/{key.limit} req</span>

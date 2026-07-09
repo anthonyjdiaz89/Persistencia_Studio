@@ -487,6 +487,17 @@ async function startServer() {
     res.json({ success: true, message: `${apiKeys.length} keys unblocked (active: ${currentActiveKeyAlias})`, keys: apiKeys.map(k => ({ alias: k.alias, isAvailable: k.isAvailable, currentUsage: k.currentUsage, isCurrentActive: currentActiveKeyAlias === k.alias })) });
   });
 
+  // API Route: Set active key manually (e.g. "Key 2" or "Key 3")
+  app.post("/api/keys/set-active", (req, res) => {
+    const { alias } = req.body as { alias: string };
+    const target = apiKeys.find(k => k.alias === alias);
+    if (!target) return res.status(404).json({ error: `Key '${alias}' not found` });
+    currentActiveKeyAlias = target.alias;
+    saveKeyStates();
+    console.log(`[Multi-Key System] ✋ Active key manually set to: ${alias}`);
+    res.json({ success: true, activeKey: alias });
+  });
+
   // API Route: Firebase Config Delivery
   app.get("/api/firebase-config", (req, res) => {
     try {
