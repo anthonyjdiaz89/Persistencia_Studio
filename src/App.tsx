@@ -1875,46 +1875,47 @@ export default function App() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {multiKeyStatus.keys.map((key: any) => (
-                      <div 
-                        key={key.index} 
-                        className={`p-2 rounded-lg border text-xs ${
-                          key.isAvailable 
-                            ? 'bg-emerald-500/5 border-emerald-500/30' 
-                            : 'bg-rose-500/5 border-rose-500/30'
-                        }`}
-                      >
+                    {multiKeyStatus.keys.map((key: any) => {
+                      const isActive = key.isCurrentActive;
+                      const isLimit = !key.isAvailable;
+                      const borderColor = isActive ? 'border-[#d1f025]/60' : isLimit ? 'border-rose-500/30' : 'border-emerald-500/20';
+                      const bgColor = isActive ? 'bg-[#d1f025]/10' : isLimit ? 'bg-rose-500/5' : 'bg-emerald-500/5';
+                      return (
+                      <div key={key.index} className={`p-2 rounded-lg border ${bgColor} ${borderColor} transition-all`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold font-mono">{key.alias}</span>
+                          <div className="flex items-center gap-1.5">
+                            {isActive && <span className="w-2 h-2 rounded-full bg-[#d1f025] animate-pulse shadow-[0_0_6px_#d1f025]" title="Key actualmente en uso"/>}
+                            <span className={`font-bold font-mono text-xs ${isActive ? 'text-[#d1f025]' : ''}`}>{key.alias}</span>
+                          </div>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                            key.isAvailable ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                            isActive ? 'bg-[#d1f025]/20 text-[#d1f025] font-black' :
+                            isLimit ? 'bg-rose-500/20 text-rose-400' :
+                            'bg-emerald-500/20 text-emerald-400'
                           }`}>
-                            {key.isAvailable ? 'ACTIVA' : 'LÍMITE'}
+                            {isActive ? '● ACTIVA' : isLimit ? 'LÍMITE' : 'EN ESPERA'}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
                           <span>{key.currentUsage}/{key.limit} req</span>
                           {key.resetInSeconds > 0 && (
                             <span className="text-rose-400">
-                              ⏱️ {key.resetInSeconds < 120
-                                ? `${key.resetInSeconds}s`
-                                : `${Math.ceil(key.resetInSeconds / 60)}min`}
+                              ⏱️ {key.resetInSeconds < 120 ? `${key.resetInSeconds}s` : `${Math.ceil(key.resetInSeconds / 60)}min`}
                             </span>
                           )}
                         </div>
-                        {/* Real stats from API */}
                         {key.apiTodayCount !== undefined && (
                           <div className="mt-1 text-[9px] text-gray-600 font-mono">
                             hoy: {key.apiTodayCount} · total: {key.apiTotalCount ?? '?'}
                           </div>
                         )}
-                        {key.resetTime && !key.isAvailable && (
-                          <div className="mt-0.5 text-[9px] text-rose-400/70 font-mono truncate" title={key.resetTime}>
+                        {key.resetTime && isLimit && (
+                          <div className="mt-0.5 text-[9px] text-rose-400/70 font-mono truncate">
                             reset: {key.resetTime?.substring(11,19) || key.resetTime}
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

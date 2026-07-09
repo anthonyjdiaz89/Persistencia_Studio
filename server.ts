@@ -422,16 +422,15 @@ async function startServer() {
       alias: keyInfo.alias,
       keyPreview: `${keyInfo.key.substring(0, 15)}...${keyInfo.key.substring(keyInfo.key.length - 4)}`,
       isAvailable: keyInfo.isAvailable,
+      isCurrentActive: currentActiveKeyAlias === keyInfo.alias, // NEW: which key is actively being used
       currentUsage: keyInfo.currentUsage,
       limit: keyInfo.limit,
-      // Calculate from stored absolute reset_time (accurate across restarts)
       resetInSeconds: keyInfo.rateLimitResetTime > now 
         ? Math.ceil((keyInfo.rateLimitResetTime - now) / 1000) 
         : 0,
       resetTime: keyInfo.apiResetTimeStr || (keyInfo.rateLimitResetTime > 0 
         ? new Date(keyInfo.rateLimitResetTime).toISOString() 
         : null),
-      // Real stats from API
       apiTodayCount: keyInfo.apiTodayCount,
       apiTotalCount: keyInfo.apiTotalCount,
     }));
@@ -1009,8 +1008,70 @@ JSON Schema:
     console.log('');
   }, 5 * 60 * 1000); // Every 5 minutes
 
-  // Persistent key state file — survives server restarts
+  // Persistent key state — file (local fallback) + Supabase (cloud, survives redeploys)
   const KEY_STATE_FILE = path.join(process.cwd(), 'key-states.json');
+  let currentActiveKeyAlias: string | null = null; // Tracks which key is currently being used
+
+  // ── Supabase key state persistence ───────────────────────────
+  const getSupabaseForKeyStates = () => {
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_ANON_KEY;
+    if (!url || !key) return null;
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      return createClient(url, key);
+    } catch { return null; }
+  };
+
+  const saveKeyStatesToSupabase = async () => {
+    const sb = getSupabaseForKeyStates();
+    if (!sb) return;
+    try {
+      const rows = apiKeys.map(k => ({
+        id: k.key.substring(0, 20),
+        alias: k.alias,
+        key_preview: k.key.substring(0, 15) + '...' + k.key.slice(-4),
+        is_available: k.isAvailable,
+        current_usage: k.currentUsage,
+        rate_limit: k.limit,
+        rate_limit_reset_time: k.rateLimitResetTime,
+        api_reset_time_str: k.apiResetTimeStr || null,
+        api_today_count: k.apiTodayCount || 0,
+        api_total_count: k.apiTotalCount || 0,
+        is_current_active: currentActiveKeyAlias === k.alias,
+        updated_at: new Date().toISOString()
+      }));
+      await sb.from('api_key_states').upsert(rows, { onConflict: 'id' });
+    } catch (e) { console.warn('[SupabaseKeyState] Save failed:', (e as any).message); }
+  };
+
+  const loadKeyStatesFromSupabase = async () => {
+    const sb = getSupabaseForKeyStates();
+    if (!sb) return false;
+    try {
+      const { data, error } = await sb.from('api_key_states').select('*');
+      if (error || !data?.length) return false;
+      const now = Date.now();
+      data.forEach((row: any) => {
+        const key = apiKeys.find(k => k.key.startsWith(row.id));
+        if (!key) return;
+        key.apiTodayCount = row.api_today_count;
+        key.apiTotalCount = row.api_total_count;
+        key.apiResetTimeStr = row.api_reset_time_str;
+        key.limit = row.rate_limit || key.limit;
+        if (row.rate_limit_reset_time && row.rate_limit_reset_time > now) {
+          key.isAvailable = false;
+          key.rateLimitResetTime = row.rate_limit_reset_time;
+          key.currentUsage = row.current_usage;
+          const secsLeft = Math.ceil((row.rate_limit_reset_time - now) / 1000);
+          console.log(`[SupabaseKeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más`);
+        }
+        if (row.is_current_active) currentActiveKeyAlias = row.alias;
+      });
+      console.log('[SupabaseKeyState] Estado cargado desde Supabase.');
+      return true;
+    } catch (e) { console.warn('[SupabaseKeyState] Load failed:', (e as any).message); return false; }
+  };
 
   // ── Request Queue ─────────────────────────────────────────────
   // Client now enforces 3-min spacing (see App.tsx GENERATION_SPACING_MS).
@@ -1111,10 +1172,12 @@ JSON Schema:
         currentUsage: k.currentUsage,
         limit: k.limit,
         apiResetTimeStr: k.apiResetTimeStr,    // "2026-07-09 00:58:13" exact from API
-        apiTodayCount: k.apiTodayCount,        // from /v1/user today stats
-        apiTotalCount: k.apiTotalCount,        // from /v1/user total stats
+        apiTodayCount: k.apiTodayCount,
+        apiTotalCount: k.apiTotalCount,
       }));
       fs.writeFileSync(KEY_STATE_FILE, JSON.stringify(state, null, 2));
+      // Also save to Supabase (async, non-blocking)
+      saveKeyStatesToSupabase().catch(() => {});
     } catch (e) { console.warn('[KeyState] Could not save state:', e); }
   };
 
@@ -1145,8 +1208,11 @@ JSON Schema:
     } catch (e) { console.warn('[KeyState] Could not load state:', e); }
   };
 
-  // Load persisted state immediately
-  loadKeyStates();
+  // Load persisted state: try Supabase first, fallback to local file
+  (async () => {
+    const fromSupabase = await loadKeyStatesFromSupabase();
+    if (!fromSupabase) loadKeyStates(); // fallback to JSON file
+  })();
 
   // Select best available API key — drain first strategy
   const selectBestAvailableApiKey = (ignoreRateLimit = false): ApiKeyInfo | null => {
@@ -1178,6 +1244,7 @@ JSON Schema:
     const firstAvailable = apiKeys.find(k => k.isAvailable);
     if (firstAvailable) {
       console.log(`[Multi-Key System] Selected ${firstAvailable.alias} (${firstAvailable.currentUsage}/${firstAvailable.limit} used) [drain-first strategy]`);
+      currentActiveKeyAlias = firstAvailable.alias; // Track which key is active
       return firstAvailable;
     }
     
