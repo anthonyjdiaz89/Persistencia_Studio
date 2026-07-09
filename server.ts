@@ -1817,26 +1817,30 @@ JSON Schema:
       }
       const usedKeyInfo = apiKeys.find(k => k.key === apiKey);
       if (usedKeyInfo) {
-        usedKeyInfo.currentUsage = Math.min((usedKeyInfo.currentUsage || 0) + 1, usedKeyInfo.limit);
         usedKeyInfo.dailyVideosGenerated++;
-        // Proactive switch by our OWN request count (fallback when API doesn't include rate_limit)
-        // If we've sent PROACTIVE_THRESHOLD requests, mark key before the API blocks us
-        const PROACTIVE_THRESHOLD = usedKeyInfo.limit - 1; // 4 when limit is 5
-        if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && !usedKeyInfo.apiResetTimeStr) {
-          // We don't have a reset_time from the API yet — estimate 15 min window from first use
-          const estimatedReset = Date.now() + (15 * 60 * 1000); // fallback: 15 min from now
-          usedKeyInfo.isAvailable = false;
-          usedKeyInfo.rateLimitResetTime = estimatedReset;
-          console.log(`[Multi-Key System] 🔄 Proactive switch by request count at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (estimated reset in 15min)`);
-        } else if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && usedKeyInfo.apiResetTimeStr) {
-          // We have the exact reset_time from the API — use it
-          const exactReset = new Date(usedKeyInfo.apiResetTimeStr.replace(' ', 'T') + 'Z').getTime();
-          if (exactReset > Date.now()) {
+
+        if (!responseData.rate_limit) {
+          // ── FALLBACK: API didn't include rate_limit — track usage manually ──
+          // Only do this when the API didn't return rate_limit info, to avoid double-counting:
+          // If rate_limit IS present, updateKeyUsage() was already called above with the exact
+          // value from the API, and markKeyAsRateLimited() already handled proactive switching.
+          usedKeyInfo.currentUsage = Math.min((usedKeyInfo.currentUsage || 0) + 1, usedKeyInfo.limit);
+          const PROACTIVE_THRESHOLD = usedKeyInfo.limit - 1; // switch at 4 when limit is 5
+          if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && !usedKeyInfo.apiResetTimeStr) {
+            const estimatedReset = Date.now() + (15 * 60 * 1000); // estimate: 15 min window
             usedKeyInfo.isAvailable = false;
-            usedKeyInfo.rateLimitResetTime = exactReset;
-            console.log(`[Multi-Key System] 🔄 Proactive switch at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (exact API reset: ${usedKeyInfo.apiResetTimeStr})`);
+            usedKeyInfo.rateLimitResetTime = estimatedReset;
+            console.log(`[Multi-Key System] 🔄 Proactive switch (no rate_limit in response) at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (reset in ~15min)`);
+          } else if (usedKeyInfo.currentUsage >= PROACTIVE_THRESHOLD && usedKeyInfo.apiResetTimeStr) {
+            const exactReset = new Date(usedKeyInfo.apiResetTimeStr.replace(' ', 'T') + 'Z').getTime();
+            if (exactReset > Date.now()) {
+              usedKeyInfo.isAvailable = false;
+              usedKeyInfo.rateLimitResetTime = exactReset;
+              console.log(`[Multi-Key System] 🔄 Proactive switch (fallback) at ${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} on ${usedKeyInfo.alias} (reset: ${usedKeyInfo.apiResetTimeStr})`);
+            }
           }
         }
+
         saveKeyStates();
         console.log(`[Multi-Key System] 📹 ${usedKeyInfo.alias} uso=${usedKeyInfo.currentUsage}/${usedKeyInfo.limit} | Task: ${taskId}`);
       }
