@@ -45,10 +45,10 @@ const CHARACTER_HEIGHTS: Record<string, string> = {
 
 // Location and prop scale proportions for the animated series
 const LOCATION_PROPORTIONS: Record<string, string> = {
-  "isla": "isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa, palmeras 8-10m altura, muelle madera 15m, cabaña rústica puerta 2m altura (más alta que Tomás), rocas volcánicas",
-  "island": "small tropical island approx 50m diameter, white sand beach, turquoise water, palm trees 8-10m height, wooden dock 15m, rustic cabin door 2m tall (taller than Tomás), volcanic rocks",
-  "casa": "wooden cabin, main door is 2 meters tall (taller than Tomás)",
-  "house": "wooden cabin, main door is 2 meters tall (taller than Tomás)"
+  "isla": "isla tropical pequeña aprox 50m diámetro, playa arena blanca, agua turquesa cristalina, palmeras 8-10m, MUELLE DE MADERA RÚSTICO: tablones de madera desgastada color miel/marrón extendiéndose ~15m desde la orilla hacia el mar perpendicular a la playa con pilotes de madera fijados al fondo (DISEÑO FIJO: siempre igual en todos los planos), cabaña rústica pequeña de madera detrás de la playa puerta 2m altura (más alta que Tomás), rocas volcánicas negras en la orilla",
+  "island": "small tropical island approx 50m diameter, white sand beach, crystal turquoise water, palm trees 8-10m, RUSTIC WOODEN DOCK: weathered honey-brown wooden planks extending ~15m perpendicular from shore into sea with wooden posts in seabed (FIXED DESIGN: always identical across all shots), small rustic wooden cabin behind beach with 2m door (taller than Tomás), black volcanic rocks on shore",
+  "casa": "cabaña pequeña de madera rústica, puerta principal 2 metros de altura (más alta que Tomás)",
+  "house": "small rustic wooden cabin, main door is 2 meters tall (taller than Tomás)"
 };
 
 // Base animated series visual style - ALWAYS applied

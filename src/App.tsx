@@ -1384,11 +1384,10 @@ export default function App() {
     const mentionsIsla = promptLower.includes('@isla') || promptLower.includes('isla') || promptLower.includes('island');
 
     // Island design anchor — injected when continuity video + @Isla to prevent visual drift
-    // The model tends to "forget" the island's design when focusing on continuity from video
     const islaAnchor = (effectiveVideoUrl && mentionsIsla)
       ? (isSpanishPrompt
-          ? "[🏝️ ANCLAJE VISUAL DE LOCACIÓN: La isla SIEMPRE debe ser exactamente: isla tropical pequeña ~50m diámetro, playa arena blanca, agua turquesa cristalina, palmeras 8-10m altura, muelle de madera 15m, cabaña rústica con puerta 2m (más alta que Tomás), rocas volcánicas. PROHIBIDO cambiar la cabaña, el muelle, la playa o cualquier elemento estructural de la isla entre planos.] "
-          : "[🏝️ LOCATION VISUAL ANCHOR: The island MUST always be exactly: small tropical island ~50m diameter, white sand beach, crystal turquoise water, palm trees 8-10m tall, 15m wooden dock, rustic cabin with 2m door (taller than Tomás), volcanic rocks. FORBIDDEN to change the cabin, dock, beach or any structural island element between shots.] ")
+          ? "[🏝️ ANCLAJE VISUAL ISLA — DISEÑO FIJO: playa arena blanca, agua turquesa cristalina, palmeras 8-10m. MUELLE: tablones de madera desgastada color miel/marrón ~15m perpendicular desde la orilla con pilotes de madera en el mar (SIEMPRE IGUAL, nunca cambia). CABAÑA: pequeña cabaña rústica de madera detrás de la playa, puerta 2m. Rocas volcánicas negras. PROHIBIDO cambiar o rediseñar el muelle, cabaña o cualquier elemento estructural entre planos.] "
+          : "[🏝️ ISLAND VISUAL ANCHOR — FIXED DESIGN: white sand beach, crystal turquoise water, palm trees 8-10m. DOCK: weathered honey-brown wooden planks ~15m perpendicular from shore with wooden posts in water (ALWAYS IDENTICAL, never changes). CABIN: small rustic wooden cabin behind beach, 2m door. Black volcanic rocks. FORBIDDEN to redesign dock, cabin or any structural element between shots.] ")
       : "";
 
     // Add video reference instruction to prompt when continuity video is used
