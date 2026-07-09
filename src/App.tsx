@@ -1901,38 +1901,37 @@ export default function App() {
                     {multiKeyStatus.keys.map((key: any) => {
                       const isActive = key.isCurrentActive;
                       const isLimit = !key.isAvailable;
+                      const isClickable = !isActive && key.isAvailable;
                       const borderColor = isActive ? 'border-[#d1f025]/60' : isLimit ? 'border-rose-500/30' : 'border-emerald-500/20';
                       const bgColor = isActive ? 'bg-[#d1f025]/10' : isLimit ? 'bg-rose-500/5' : 'bg-emerald-500/5';
+                      const setActive = async () => {
+                        if (!isClickable) return;
+                        try {
+                          await fetch(`${API_BASE_URL}/api/keys/set-active`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({alias: key.alias}) });
+                          await fetchMultiKeyStatus();
+                        } catch {}
+                      };
                       return (
-                      <div key={key.index} className={`p-2 rounded-lg border ${bgColor} ${borderColor} transition-all`}>
+                      <div
+                        key={key.index}
+                        onClick={setActive}
+                        className={`p-2 rounded-lg border ${bgColor} ${borderColor} transition-all
+                          ${isClickable ? 'cursor-pointer hover:border-[#d1f025]/40 hover:bg-[#d1f025]/5' : ''}
+                          ${isActive ? 'ring-1 ring-[#d1f025]/30' : ''}`}
+                        title={isClickable ? `Click para activar ${key.alias}` : isActive ? 'Key actualmente en uso' : 'Key bloqueada'}
+                      >
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-1.5">
-                            {isActive && <span className="w-2 h-2 rounded-full bg-[#d1f025] animate-pulse shadow-[0_0_6px_#d1f025]" title="Key actualmente en uso"/>}
-                            <span className={`font-bold font-mono text-xs ${isActive ? 'text-[#d1f025]' : ''}`}>{key.alias}</span>
+                            {isActive && <span className="w-2 h-2 rounded-full bg-[#d1f025] animate-pulse shadow-[0_0_6px_#d1f025]"/>}
+                            <span className={`font-bold font-mono text-xs ${isActive ? 'text-[#d1f025]' : isClickable ? 'text-white' : ''}`}>{key.alias}</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            {!isActive && key.isAvailable && (
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await fetch(`${API_BASE_URL}/api/keys/set-active`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({alias: key.alias}) });
-                                    await fetchMultiKeyStatus();
-                                  } catch {}
-                                }}
-                                className="text-[9px] text-gray-500 hover:text-[#d1f025] px-1 py-0.5 rounded hover:bg-[#d1f025]/10 transition-colors font-mono"
-                                title="Usar esta key como activa"
-                              >
-                                Usar
-                              </button>
-                            )}
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                              isActive ? 'bg-[#d1f025]/20 text-[#d1f025] font-black' :
-                              isLimit ? 'bg-rose-500/20 text-rose-400' :
-                              'bg-emerald-500/20 text-emerald-400'
-                            }`}>
-                              {isActive ? '● ACTIVA' : isLimit ? 'LÍMITE' : 'EN ESPERA'}
-                            </span>
-                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                            isActive ? 'bg-[#d1f025]/20 text-[#d1f025] font-black' :
+                            isLimit ? 'bg-rose-500/20 text-rose-400' :
+                            'bg-emerald-500/10 text-emerald-500'
+                          }`}>
+                            {isActive ? '● ACTIVA' : isLimit ? 'LÍMITE' : isClickable ? '↗ ACTIVAR' : 'EN ESPERA'}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
                           <span>{key.currentUsage}/{key.limit} req</span>
