@@ -474,16 +474,17 @@ async function startServer() {
 
   // API Route: Force-reset all key states (clear timers, mark all available)
   app.post("/api/keys/reset", (_req, res) => {
+    // Reset only the rate-limit blocks — preserve usage history and currentActiveKeyAlias
     apiKeys.forEach(keyInfo => {
       keyInfo.isAvailable = true;
       keyInfo.rateLimitResetTime = 0;
       keyInfo.currentUsage = 0;
-      keyInfo.dailyVideosGenerated = 0;
-      keyInfo.dailyResetTime = Date.now() + (15 * 60 * 1000);
+      keyInfo.apiResetTimeStr = undefined;
+      // Keep dailyVideosGenerated and apiTodayCount — real stats persist
     });
-    saveKeyStates(); // Persist the cleared state
-    console.log(`[Multi-Key System] 🔄 All keys reset by user request`);
-    res.json({ success: true, message: `${apiKeys.length} keys reset to available`, keys: apiKeys.map(k => ({ alias: k.alias, isAvailable: k.isAvailable, currentUsage: k.currentUsage })) });
+    saveKeyStates();
+    console.log(`[Multi-Key System] 🔄 All keys unblocked. Active key preserved: ${currentActiveKeyAlias || 'none'}`);
+    res.json({ success: true, message: `${apiKeys.length} keys unblocked (active: ${currentActiveKeyAlias})`, keys: apiKeys.map(k => ({ alias: k.alias, isAvailable: k.isAvailable, currentUsage: k.currentUsage, isCurrentActive: currentActiveKeyAlias === k.alias })) });
   });
 
   // API Route: Firebase Config Delivery
@@ -1208,7 +1209,15 @@ JSON Schema:
           key.currentUsage = s.currentUsage ?? key.currentUsage;
           const secsLeft = Math.ceil((s.rateLimitResetTime - now) / 1000);
           const resetAt = new Date(s.rateLimitResetTime).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-          console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT | API: ${s.apiResetTimeStr || 'n/a'})`);
+          console.log(`[KeyState] Restored ${key.alias}: bloqueada ${secsLeft}s más (reset ${resetAt} COT)`);
+        } else {
+          // Window expired — restore usage count for display but mark available
+          key.currentUsage = s.currentUsage ?? key.currentUsage;
+        }
+        // Restore last active key (continuity across restarts)
+        if (s.isCurrentActive) {
+          currentActiveKeyAlias = key.alias;
+          console.log(`[KeyState] Restored active key: ${key.alias}`);
         }
       });
       console.log('[KeyState] Estado cargado desde disco.');
@@ -1244,15 +1253,16 @@ JSON Schema:
     }
     
     // STRATEGY: DRAIN FIRST, THEN SWITCH
-    // Always use the first available key — do NOT round-robin.
-    // This exhausts Key1 (5 req) fully before touching Key2.
-    // That way Key1's 15-min reset starts ~15 requests BEFORE Key2's limit,
-    // so by the time Key2 is also exhausted, Key1 is already available again.
-    const firstAvailable = apiKeys.find(k => k.isAvailable);
-    if (firstAvailable) {
-      console.log(`[Multi-Key System] Selected ${firstAvailable.alias} (${firstAvailable.currentUsage}/${firstAvailable.limit} used) [drain-first strategy]`);
-      currentActiveKeyAlias = firstAvailable.alias;
-      return firstAvailable;
+    // Prefer the last active key if it's still available (continuity across restarts).
+    // If the last active key is exhausted or blocked, move to the next available one.
+    const lastActive = currentActiveKeyAlias
+      ? apiKeys.find(k => k.alias === currentActiveKeyAlias && k.isAvailable)
+      : null;
+    const selectedKey = lastActive || apiKeys.find(k => k.isAvailable);
+    if (selectedKey) {
+      console.log(`[Multi-Key System] Selected ${selectedKey.alias} (${selectedKey.currentUsage}/${selectedKey.limit} used)${lastActive ? ' [continuity]' : ' [drain-first]'}`);
+      currentActiveKeyAlias = selectedKey.alias;
+      return selectedKey;
     }
     
     // All keys are rate-limited — NEVER retry during the wait period.
