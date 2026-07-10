@@ -1365,7 +1365,7 @@ export default function App() {
         if (matchingTask?.data?.results?.[0]) {
           previousClipVideoUrl = matchingTask.data.results[0];
           console.log("[Continuity] Encontrado video anterior para continuidad:", previousClipVideoUrl);
-          
+
           setSuccessToast(`¡Continuidad activada! Usando video del Shot ${clip.clipNumber - 1} como referencia.`);
           setTimeout(() => setSuccessToast(null), 4000);
         } else {
@@ -1377,6 +1377,30 @@ export default function App() {
     // If the clip has a manually selected continuity video (from ScriptPanel), use it
     const manualVideoUrl = (clip as any).video_urls?.[0] || null;
     const effectiveVideoUrl = manualVideoUrl || previousClipVideoUrl;
+
+    // Also check if the previous task has a last_frame_url for frame-exact continuity
+    let previousClipFrameUrl: string | null = null;
+    if (clip.clipNumber > 1 && parentBlueprint) {
+      const prevClip = parentBlueprint.clips.find(c => c.clipNumber === clip.clipNumber - 1);
+      if (prevClip) {
+        const prevTask = tasks.find(t =>
+          t.status === "completed" &&
+          ((t.sceneTitle === parentBlueprint.sceneTitle && t.clipNumber === prevClip.clipNumber) ||
+           (t.input?.prompt && t.input.prompt.includes(prevClip.prompt)))
+        );
+        if (prevTask?.data?.last_frame_url) {
+          previousClipFrameUrl = prevTask.data.last_frame_url;
+          console.log("[Continuity] ✅ Usando last_frame_url del Shot anterior como inicio exacto:", previousClipFrameUrl);
+        }
+      }
+    }
+
+    // When we have the previous clip's last frame, use it as the leading image reference
+    // so the new clip STARTS from exactly that frame
+    const effectiveImages = previousClipFrameUrl
+      ? [previousClipFrameUrl]  // last frame as sole starting point
+      : selectedRefImages;
+
     const promptLower = clip.prompt.toLowerCase();
     const isSpanishPrompt = /[áéíóúñ¿¡]/.test(clip.prompt) || promptLower.includes(' en ') || promptLower.includes(' de ');
 
@@ -1390,6 +1414,11 @@ export default function App() {
           : "[🏝️ FIXED ISLAND DESIGN — ALL THESE ELEMENTS ALWAYS IDENTICAL: white sand beach, turquoise water with visible coral reef, palm trees and tropical trees. DOCK: brown wooden planks ~15m with BLACK RUBBER TIRES HANGING on posts as bumpers (MANDATORY). SMALL BLUE BOAT next to dock. CABIN: small dark wood with peaked roof. YELLOW WOODEN BENCH/TABLE on beach. Grey rocks on shore. FORBIDDEN to change any of these elements between shots.] ")
       : "";
 
+    // Continuity frame prefix when we have exact last frame
+    const frameContinuityPrefix = previousClipFrameUrl
+      ? "[🎬 CONTINUIDAD EXACTA: Esta escena comienza EXACTAMENTE desde el último fotograma del plano anterior (Imagen1 = último frame). Mantén personajes, vestuario, iluminación y estilo visual idénticos. Continuación directa sin salto temporal.]  "
+      : "";
+
     // Add video reference instruction to prompt when continuity video is used
     const videoInstruction = effectiveVideoUrl
       ? (isSpanishPrompt
@@ -1398,16 +1427,16 @@ export default function App() {
       : "";
 
     const { compiled: compiledPrompt } = compileFinalPrompt(
-      islaAnchor + videoInstruction + clip.prompt,
+      frameContinuityPrefix + islaAnchor + videoInstruction + clip.prompt,
       characters,
       props,
       locations,
       clip.cameraSettings as any,
-      selectedRefImages,
+      effectiveImages,
       !!effectiveVideoUrl
     );
 
-    const finalGenType: GenerationMode = (selectedRefImages.length > 0 || effectiveVideoUrl)
+    const finalGenType: GenerationMode = (effectiveImages.length > 0 || effectiveVideoUrl)
       ? "reference-to-video"
       : "text-to-video";
 
@@ -1422,7 +1451,7 @@ export default function App() {
       web_search: false,
       return_last_frame: false,
       seed: -1,
-      ...(selectedRefImages.length > 0 ? { image_urls: selectedRefImages.slice(0, 9) } : {}),
+      ...(effectiveImages.length > 0 ? { image_urls: effectiveImages.slice(0, 9) } : {}),
       ...(effectiveVideoUrl ? { video_urls: [effectiveVideoUrl] } : {})
     };
 
@@ -1489,6 +1518,7 @@ export default function App() {
     }
 
     let lastCompletedVideoUrl: string | null = null;
+    let lastCompletedFrameUrl: string | null = null; // último fotograma para continuidad frame-exact
 
     try {
       for (let i = 0; i < blueprint.clips.length; i++) {
@@ -1508,17 +1538,33 @@ export default function App() {
           ? clip.image_urls
           : autoRefImages;
 
+        // ── CONTINUIDAD FRAME-EXACT ──────────────────────────────────────────────
+        // Si tenemos el último fotograma del clip anterior, lo usamos como imagen de
+        // inicio (image_urls[0]) — el modelo EMPIEZA desde ese fotograma exacto.
+        // El video completo del clip anterior va en video_urls como contexto adicional.
+        const hasContinuityFrame = !!lastCompletedFrameUrl;
+        const continuityImages = hasContinuityFrame
+          ? [lastCompletedFrameUrl!]  // sólo el último fotograma como inicio exacto
+          : selectedRefImages;
+        const continuityPromptPrefix = hasContinuityFrame
+          ? "[🎬 CONTINUIDAD EXACTA: Esta escena comienza EXACTAMENTE desde el último fotograma del plano anterior (Imagen1 = último frame del clip previo). Mantén personajes, vestuario, iluminación y estilo visual idénticos al video de referencia. Continuación temporal directa sin salto.]  "
+          : "";
+
         const { compiled: compiledPrompt } = compileFinalPrompt(
-          clip.prompt,
+          continuityPromptPrefix + clip.prompt,
           characters,
           props,
           locations,
           clip.cameraSettings as any,
-          selectedRefImages,
+          continuityImages,
           !!lastCompletedVideoUrl
         );
 
-        const finalGenType: GenerationMode = (selectedRefImages.length > 0 || lastCompletedVideoUrl)
+        // return_last_frame=true en todos salvo el último → la API devuelve last_frame_url
+        // que usamos como imagen de inicio del siguiente clip
+        const isLastClip = i === blueprint.clips.length - 1;
+
+        const finalGenType: GenerationMode = (continuityImages.length > 0 || lastCompletedVideoUrl)
           ? "reference-to-video"
           : "text-to-video";
 
@@ -1531,10 +1577,10 @@ export default function App() {
           generate_audio: clip.generate_audio,
           watermark: false,
           web_search: false,
-          return_last_frame: false,
+          return_last_frame: !isLastClip, // true en todos menos el último → habilita continuidad
           seed: -1,
-          ...(selectedRefImages.length > 0 ? { image_urls: selectedRefImages.slice(0, 9) } : {}),
-          // Set reference continuity video from previous shot output
+          ...(continuityImages.length > 0 ? { image_urls: continuityImages.slice(0, 9) } : {}),
+          // Video completo del clip anterior como contexto de estilo y personajes
           ...(lastCompletedVideoUrl ? { video_urls: [lastCompletedVideoUrl] } : {})
         };
 
@@ -1605,6 +1651,13 @@ export default function App() {
                 if (statusData.status === "completed") {
                   const results = statusData.data?.results || [];
                   completedVideoUrl = results[0] || null;
+                  // Capturar el último fotograma para continuidad frame-exact en el siguiente clip
+                  lastCompletedFrameUrl = statusData.data?.last_frame_url || null;
+                  if (lastCompletedFrameUrl) {
+                    console.log(`[Continuity] ✅ last_frame_url capturado para Shot ${clip.clipNumber} → será inicio exacto del Shot ${clip.clipNumber + 1}`);
+                  } else {
+                    console.log(`[Continuity] ℹ️ Sin last_frame_url para Shot ${clip.clipNumber} — el modelo usará solo video_urls como contexto`);
+                  }
                 } else {
                   throw new Error(statusData.failed_reason || "Task failed rendering");
                 }
