@@ -1329,16 +1329,28 @@ export default function PromptBuilderPanel({
           </div>
 
           {/* Action Trigger Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
               type="button"
               disabled={isGenerating || (!hasEnvApiKey && !apiKey) || !promptText.trim()}
               onClick={handleGenerateClick}
-              className="bg-primary-container text-on-primary-container px-6 py-2 rounded-xl font-button-text font-black uppercase tracking-wide hover:brightness-110 glow-hover transition-all flex flex-col items-center justify-center leading-tight shadow-md disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className={`
+                flex-1 md:flex-none
+                px-6 py-2.5 md:py-2 rounded-xl font-button-text font-black uppercase tracking-wide
+                transition-all flex items-center justify-center gap-2 leading-tight shadow-md
+                disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer
+                ${isGenerating
+                  ? "bg-[#d1f025]/20 border-2 border-[#d1f025]/60 text-[#d1f025] animate-pulse"
+                  : "bg-primary-container text-on-primary-container hover:brightness-110 glow-hover"
+                }
+              `}
             >
-              <span className="flex items-center space-x-1 font-extrabold text-black">
-                {isGenerating ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" /> : <Play className="w-3.5 h-3.5 fill-current text-black" />}
-                <span>{isGenerating ? "Generando" : "Generar Shot"}</span>
+              {isGenerating
+                ? <RefreshCw className="w-4 h-4 animate-spin" />
+                : <Play className="w-4 h-4 fill-current text-black" />
+              }
+              <span className={isGenerating ? "text-[#d1f025]" : "text-black"}>
+                {isGenerating ? "Generando..." : "Generar Shot"}
               </span>
             </button>
           </div>

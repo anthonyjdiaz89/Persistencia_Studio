@@ -2826,6 +2826,42 @@ export default function App() {
         </div>
       )}
 
+      {/* ── MOBILE STATUS BAR (above bottom nav) ─────────────────────── */}
+      {/* Shows countdown, generating state, or active renders — only on mobile */}
+      {(queueCountdown > 0 || isGenerating || tasks.some(t => t.status === "queued" || t.status === "generating")) && (
+        <div className="md:hidden fixed bottom-14 left-0 right-0 z-50 border-t border-white/10 bg-[#0d0e12]/98 backdrop-blur-xl">
+          {queueCountdown > 0 ? (
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <div className="w-5 h-5 rounded-full border-2 border-[#d1f025]/40 border-t-[#d1f025] animate-spin flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black text-[#d1f025] leading-none">
+                  ENVIANDO EN {Math.floor(queueCountdown / 60)}:{String(queueCountdown % 60).padStart(2, '0')}
+                </p>
+                <p className="text-[9px] text-[#d1f025]/50 mt-0.5">3 min entre videos · sin bloqueos</p>
+              </div>
+              <span className="font-mono font-black text-[#d1f025] text-sm">
+                {Math.floor(queueCountdown / 60)}:{String(queueCountdown % 60).padStart(2, '0')}
+              </span>
+            </div>
+          ) : isGenerating ? (
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <div className="w-5 h-5 rounded-full border-2 border-[#d1f025]/40 border-t-[#d1f025] animate-spin flex-shrink-0" />
+              <p className="text-xs font-black text-[#d1f025] flex-1">Enviando a la API...</p>
+            </div>
+          ) : tasks.filter(t => t.status === "queued" || t.status === "generating").length > 0 ? (
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <div className="w-5 h-5 rounded-full border-2 border-emerald-400/40 border-t-emerald-400 animate-spin flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black text-emerald-400 leading-none">
+                  RENDERIZANDO {tasks.filter(t => t.status === "queued" || t.status === "generating").length} VIDEO{tasks.filter(t => t.status === "queued" || t.status === "generating").length > 1 ? "S" : ""}
+                </p>
+                <p className="text-[9px] text-emerald-400/50 mt-0.5">El video aparecerá en Historial cuando esté listo</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {/* ── MOBILE BOTTOM NAVIGATION ─────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-14 bg-[#0d0e12]/95 backdrop-blur-xl border-t border-white/10 flex items-stretch safe-area-inset-bottom">
         {/* Studio */}
