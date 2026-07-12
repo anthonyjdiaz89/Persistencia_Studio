@@ -1094,7 +1094,10 @@ export default function App() {
         setQueueCountdown(0);
       }
 
-      lastGenerationTime.current = Date.now();
+      // ── Mark generation time ONLY when the request is actually sent ──
+      // Not before — if the request fails (401, validation, network error),
+      // the countdown should NOT fire on the next attempt.
+      // The rate-limit is enforced server-side; client spacing is just a safety buffer.
 
       const success = await executeGenerationWithRetry(input, model, sceneTitle, clipNumber, 0);
 
@@ -1102,6 +1105,9 @@ export default function App() {
         console.log("[Generation] Failed after retries");
         return;
       }
+
+      // Success: record timestamp so the next generation waits 3 min
+      lastGenerationTime.current = Date.now();
 
       // On success, update UI state
       setSelectedTaskId(tasks[0]?.id || "");
