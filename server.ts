@@ -498,6 +498,68 @@ async function startServer() {
     res.json({ success: true, activeKey: alias });
   });
 
+  // API Route: Diagnose all keys + model availability
+  app.get("/api/diagnose", async (_req, res) => {
+    const MODELS = [
+      { id: "seedance-25",      label: "Seedance 2.5",      durations: [5,10,20,30], resolutions: ["720p","1080p"] },
+      { id: "seedance-2",       label: "Seedance 2",        durations: [5,10],       resolutions: ["720p","1080p"] },
+      { id: "seedance-2-mini",  label: "Seedance 2 Mini",   durations: [5,10,15],    resolutions: ["720p","1080p"] },
+      { id: "veo-31",           label: "Veo 3.1",           durations: [8],          resolutions: ["720p","1080p"] },
+      { id: "veo3",             label: "Veo 3",             durations: [8],          resolutions: ["720p","1080p"] },
+      { id: "veo2",             label: "Veo 2",             durations: [10],         resolutions: ["720p","1080p"] },
+      { id: "sora-2",           label: "Sora 2",            durations: [10],         resolutions: ["720p","1080p"] },
+      { id: "kling-3",          label: "Kling 3",           durations: [5,10],       resolutions: ["720p","1080p"] },
+      { id: "wan-25",           label: "Wan 2.5",           durations: [5,10],       resolutions: ["720p","1080p"] },
+      { id: "ltxv-2",           label: "LTX Video 2",       durations: [6,10],       resolutions: ["720p","1080p"] },
+      { id: "ltxv-13b",         label: "LTX Video 13B",     durations: [1,30,60],    resolutions: ["720p","1080p"] },
+      { id: "grok-imagine-1-5", label: "Grok Imagine 1.5",  durations: [5,10],       resolutions: ["720p","1080p"] },
+      { id: "gemini-omni",      label: "Gemini Omni",       durations: [4,8,10],     resolutions: ["720p","1080p"] },
+      { id: "higgsfield_v1",    label: "Higgsfield V1",     durations: [5,10,15],    resolutions: ["720p","1080p"] },
+      { id: "nanobanana-video", label: "NanoBanana",        durations: [5,10],       resolutions: ["720p","1080p"] },
+    ];
+
+    const keyResults: any[] = [];
+    for (const keyInfo of apiKeys) {
+      try {
+        const r = await fetch("https://videogenapi.com/api/v1/user", {
+          headers: { "Authorization": `Bearer ${keyInfo.key}` }
+        });
+        if (r.ok) {
+          const d = await r.json();
+          keyResults.push({
+            alias: keyInfo.alias,
+            status: "✅ válida",
+            plan: d.plan?.name || "desconocido",
+            today: d.statistics?.today ?? 0,
+            total: d.statistics?.total ?? 0,
+            monthly_limit: d.plan?.monthly_limit || "sin límite",
+            isAvailable: keyInfo.isAvailable,
+            currentUsage: keyInfo.currentUsage,
+            limit: keyInfo.limit,
+          });
+        } else {
+          const errBody = await r.text().catch(() => "");
+          keyResults.push({
+            alias: keyInfo.alias,
+            status: `❌ inválida (HTTP ${r.status})`,
+            error: errBody.substring(0, 200),
+          });
+        }
+      } catch(e: any) {
+        keyResults.push({ alias: keyInfo.alias, status: "❌ error de red", error: e.message });
+      }
+    }
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      server_active_key: currentActiveKeyAlias,
+      total_keys_configured: apiKeys.length,
+      keys: keyResults,
+      models_catalog: MODELS,
+      tip: "Para probar un modelo específico, usa POST /api/seedance/generations con el modelo deseado",
+    });
+  });
+
   // API Route: Firebase Config Delivery
   app.get("/api/firebase-config", (req, res) => {
     try {

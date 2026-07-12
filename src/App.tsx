@@ -1512,10 +1512,10 @@ export default function App() {
     setIsSequentiallyRendering(true);
 
     const activeKey = apiKey || "";
+    // NOTE: headers deliberately don't include Authorization — the server's multi-key
+    // load balancer handles key selection. Passing a client key here would override the
+    // managed keys and cause 401 errors if the stored localStorage key is invalid.
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (activeKey) {
-      headers["Authorization"] = `Bearer ${activeKey}`;
-    }
 
     let lastCompletedVideoUrl: string | null = null;
     let lastCompletedFrameUrl: string | null = null; // último fotograma para continuidad frame-exact
