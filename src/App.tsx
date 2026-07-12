@@ -36,6 +36,10 @@ import {
   MessageSquare,
   Pin,
   Filter,
+  Menu,
+  X,
+  BookOpen,
+  Layers2,
   LayoutGrid,
   Upload,
   Share2,
@@ -373,6 +377,8 @@ export default function App() {
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<"director" | "history">("director");
   const [activeTab, setActiveTab] = useState<"studio" | "history" | "assets">("studio");
+  // Mobile drawer: "script" | "casting" | null
+  const [mobileDrawer, setMobileDrawer] = useState<"script" | "casting" | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // 4. Tasks (History) State (loaded from Firebase)
@@ -1721,58 +1727,57 @@ export default function App() {
     <div className="h-screen overflow-hidden flex flex-col bg-background text-on-background font-sans selection:bg-primary-container/30 selection:text-white" id="root-layout">
       
       {/* 1. TOP HEADER APP BAR (Fixed) */}
-      <header className="fixed top-0 right-0 left-0 h-16 z-40 flex justify-between items-center px-6 bg-[#121317]/85 backdrop-blur-xl border-b border-[#454933]/30">
-        <div className="flex items-center gap-8">
-          <h1 className="font-display text-base font-black tracking-tighter text-white truncate flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-[#d1f025]/10 border border-[#d1f025]/20 flex items-center justify-center">
-              <Film className="w-4 h-4 text-[#d1f025]" />
-            </span>
-            <span className="font-bold tracking-tight text-white">Persistencia Studio</span>
-          </h1>
+      <header className="fixed top-0 right-0 left-0 h-14 md:h-16 z-40 flex justify-between items-center px-3 md:px-6 bg-[#121317]/95 backdrop-blur-xl border-b border-[#454933]/30">
+        {/* Logo */}
+        <h1 className="font-display text-sm md:text-base font-black tracking-tighter text-white truncate flex items-center gap-2">
+          <span className="p-1 md:p-1.5 rounded-lg bg-[#d1f025]/10 border border-[#d1f025]/20 flex items-center justify-center">
+            <Film className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#d1f025]" />
+          </span>
+          <span className="font-bold tracking-tight text-white">Persistencia Studio</span>
+        </h1>
 
-          {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 p-1 bg-black/30 rounded-xl border border-white/5">
-            <button
-              type="button"
-              onClick={() => setActiveTab("studio")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "studio"
-                  ? "bg-[#d1f025] text-black shadow-md"
-                  : "text-[#c8c6c5] hover:text-white"
-              }`}
-            >
-              Studio
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("assets")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "assets"
-                  ? "bg-[#d1f025] text-black shadow-md"
-                  : "text-[#c8c6c5] hover:text-white"
-              }`}
-            >
-              Materiales
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("history");
-                syncHistoryWithApi(null, true);
-              }}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "history"
-                  ? "bg-[#d1f025] text-black shadow-md"
-                  : "text-[#c8c6c5] hover:text-white"
-              }`}
-            >
-              Historial
-            </button>
-          </nav>
-        </div>
+        {/* Desktop Navigation Tabs */}
+        <nav className="hidden md:flex items-center gap-1 p-1 bg-black/30 rounded-xl border border-white/5">
+          <button
+            type="button"
+            onClick={() => setActiveTab("studio")}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "studio"
+                ? "bg-[#d1f025] text-black shadow-md"
+                : "text-[#c8c6c5] hover:text-white"
+            }`}
+          >
+            Studio
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("assets")}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "assets"
+                ? "bg-[#d1f025] text-black shadow-md"
+                : "text-[#c8c6c5] hover:text-white"
+            }`}
+          >
+            Materiales
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("history");
+              syncHistoryWithApi(null, true);
+            }}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "history"
+                ? "bg-[#d1f025] text-black shadow-md"
+                : "text-[#c8c6c5] hover:text-white"
+            }`}
+          >
+            Historial
+          </button>
+        </nav>
 
-        {/* Toolbar Controls / Actions */}
-        <div className="flex items-center gap-4">
+        {/* Desktop Toolbar Controls */}
+        <div className="hidden md:flex items-center gap-4">
           <button 
             type="button"
             onClick={() => {
@@ -1815,25 +1820,55 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* Mobile top-right: user + logout only */}
+        <div className="flex md:hidden items-center gap-2">
+          {/* Active render indicator */}
+          {tasks.some(t => t.status === "queued" || t.status === "generating") && (
+            <span className="w-2 h-2 bg-[#d1f025] rounded-full animate-pulse" />
+          )}
+          <button
+            type="button"
+            onClick={signOut}
+            className="p-2 rounded-lg bg-[#1e1f23] border border-[#454933]/30 active:bg-[#343539] transition-all"
+            title="Cerrar sesión"
+          >
+            <LogOut className="w-4 h-4 text-red-400" />
+          </button>
+        </div>
       </header>
 
       {/* 3. MAIN WORKSPACE */}
-      <main className="flex-1 ml-0 mt-16 flex h-[calc(100vh-4rem-2.5rem)] overflow-hidden bg-background">
+      <main className="flex-1 ml-0 mt-14 md:mt-16 flex h-[calc(100dvh-3.5rem-2.5rem)] md:h-[calc(100vh-4rem-2.5rem)] overflow-hidden bg-background pb-14 md:pb-0">
         {activeTab === "studio" && (
           <>
-            {/* CASTING DRAWER PANEL (Collapsible Left Column) */}
+            {/* Mobile drawer backdrop */}
+            {mobileDrawer && (
+              <div
+                className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+                onClick={() => setMobileDrawer(null)}
+              />
+            )}
+
+            {/* CASTING DRAWER PANEL */}
             {isAssetsPanelOpen && (
-              <aside className="w-80 bg-surface-container-lowest border-r border-[#454933]/20 flex flex-col shrink-0 animate-fade-in relative z-10">
+              <aside className={`
+                fixed md:relative top-14 md:top-auto bottom-14 md:bottom-auto left-0 z-50 md:z-10
+                w-4/5 md:w-80 max-w-xs
+                transform transition-transform duration-300 ease-in-out
+                ${mobileDrawer === "casting" ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+                bg-[#0d0e12] md:bg-surface-container-lowest border-r border-[#454933]/20 flex flex-col shrink-0
+              `}>
                 <div className="p-4 border-b border-[#454933]/20 flex justify-between items-center bg-[#121317]/50">
                   <span className="text-xs font-black text-white font-display uppercase tracking-widest flex items-center gap-2">
                     <Users className="w-4 h-4 text-[#d1f025]" />
                     Materiales y Casting
                   </span>
                   <button 
-                    onClick={() => setIsAssetsPanelOpen(false)}
-                    className="text-[10px] text-rose-400 hover:underline uppercase cursor-pointer"
+                    onClick={() => { setIsAssetsPanelOpen(false); setMobileDrawer(null); }}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-white active:bg-white/10 cursor-pointer"
                   >
-                    Ocultar
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-1 bg-black/5">
@@ -2446,15 +2481,29 @@ export default function App() {
             </section>
 
             {/* RIGHT SIDE PANEL — Script / Guión */}
-            <aside className="w-80 bg-[#0e0f12] border-l border-white/8 flex flex-col shrink-0 relative z-10">
+            <aside className={`
+              fixed md:relative top-14 md:top-auto bottom-14 md:bottom-auto right-0 z-50 md:z-10
+              w-full md:w-80
+              transform transition-transform duration-300 ease-in-out
+              ${mobileDrawer === "script" ? "translate-x-0" : "translate-x-full md:translate-x-0"}
+              bg-[#0e0f12] border-l border-white/8 flex flex-col shrink-0
+            `}>
               <div className="px-3.5 py-3 border-b border-white/8 bg-[#121317]/80 flex justify-between items-center flex-shrink-0">
                 <span className="text-xs font-black text-white font-display uppercase tracking-widest flex items-center gap-2">
                   <Film className="w-4 h-4 text-[#d1f025]" />
                   Guión
                 </span>
-                {tasks.filter(t => t.status === "queued" || t.status === "generating").length > 0 && (
-                  <span className="w-2.5 h-2.5 bg-[#d1f025] rounded-full animate-pulse shadow-[0_0_8px_#d1f025]" title="Renders activos" />
-                )}
+                <div className="flex items-center gap-2">
+                  {tasks.filter(t => t.status === "queued" || t.status === "generating").length > 0 && (
+                    <span className="w-2.5 h-2.5 bg-[#d1f025] rounded-full animate-pulse shadow-[0_0_8px_#d1f025]" title="Renders activos" />
+                  )}
+                  <button
+                    onClick={() => setMobileDrawer(null)}
+                    className="md:hidden p-1.5 rounded-lg text-gray-400 hover:text-white active:bg-white/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col overflow-hidden">
@@ -2776,6 +2825,52 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── MOBILE BOTTOM NAVIGATION ─────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-14 bg-[#0d0e12]/95 backdrop-blur-xl border-t border-white/10 flex items-stretch safe-area-inset-bottom">
+        {/* Studio */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab("studio"); setMobileDrawer(null); }}
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors active:bg-white/5 ${activeTab === "studio" && !mobileDrawer ? "text-[#d1f025]" : "text-gray-500"}`}
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-wide">Studio</span>
+        </button>
+
+        {/* Guión */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab("studio"); setMobileDrawer(mobileDrawer === "script" ? null : "script"); }}
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors active:bg-white/5 relative ${mobileDrawer === "script" ? "text-[#d1f025]" : "text-gray-500"}`}
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-wide">Guión</span>
+          {tasks.some(t => t.status === "queued" || t.status === "generating") && (
+            <span className="absolute top-1 right-1/4 w-1.5 h-1.5 bg-[#d1f025] rounded-full" />
+          )}
+        </button>
+
+        {/* Casting / Materiales */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab("studio"); setIsAssetsPanelOpen(true); setMobileDrawer(mobileDrawer === "casting" ? null : "casting"); }}
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors active:bg-white/5 ${mobileDrawer === "casting" ? "text-[#d1f025]" : "text-gray-500"}`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-wide">Cast</span>
+        </button>
+
+        {/* Historial */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab("history"); setMobileDrawer(null); syncHistoryWithApi(null, true); }}
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors active:bg-white/5 ${activeTab === "history" && !mobileDrawer ? "text-[#d1f025]" : "text-gray-500"}`}
+        >
+          <History className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-wide">Historial</span>
+        </button>
+      </nav>
     </div>
   );
 }

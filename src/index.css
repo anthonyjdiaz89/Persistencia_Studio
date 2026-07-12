@@ -71,3 +71,42 @@ body {
 .glow-hover:hover {
   box-shadow: 0 0 15px rgba(209, 240, 37, 0.15);
 }
+
+/* ── Mobile optimizations ────────────────────────── */
+/* Prevent text resize on iOS when rotating */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Prevent rubber-band scrolling on body */
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Smooth drawer transitions */
+.drawer-transition {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Safe area bottom padding for phones with home indicator */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Better touch scrolling inside containers */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-scrolling: touch;
+}
+
+/* Larger tap targets on mobile */
+@media (max-width: 768px) {
+  button, [role="button"] {
+    min-height: 44px;
+  }
+  input, textarea, select {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
