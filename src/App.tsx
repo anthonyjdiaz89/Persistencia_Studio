@@ -1475,27 +1475,24 @@ export default function App() {
     // Detect if @Isla / island location is mentioned in the prompt
     const mentionsIsla = promptLower.includes('@isla') || promptLower.includes('isla') || promptLower.includes('island');
 
-    // Island design anchor — injected when continuity video + @Isla to prevent visual drift
+    // ── Prefixes — kept SHORT to leave room for prompt + character descriptions ──
+    // VideoGenAPI limit: 5000 chars total
     const islaAnchor = (effectiveVideoUrl && mentionsIsla)
-      ? (isSpanishPrompt
-          ? "[🏝️ DISEÑO FIJO DE LA ISLA — TODOS ESTOS ELEMENTOS SIEMPRE IGUALES: playa arena blanca, agua turquesa con arrecife coral visible, palmeras y árboles tropicales. MUELLE: tablones madera marrón ~15m con NEUMÁTICOS NEGROS COLGADOS en los pilotes como amortiguadores (OBLIGATORIO). BARCA AZUL pequeña junto al muelle. CABAÑA: pequeña de madera oscura con techo a dos aguas. BANCO/MESÓN DE MADERA AMARILLO en la playa. Rocas grises en la orilla. PROHIBIDO cambiar cualquiera de estos elementos entre planos.] "
-          : "[🏝️ FIXED ISLAND DESIGN — ALL THESE ELEMENTS ALWAYS IDENTICAL: white sand beach, turquoise water with visible coral reef, palm trees and tropical trees. DOCK: brown wooden planks ~15m with BLACK RUBBER TIRES HANGING on posts as bumpers (MANDATORY). SMALL BLUE BOAT next to dock. CABIN: small dark wood with peaked roof. YELLOW WOODEN BENCH/TABLE on beach. Grey rocks on shore. FORBIDDEN to change any of these elements between shots.] ")
+      ? "[🏝️ ISLA FIJA: arena blanca, agua turquesa, muelle madera con NEUMÁTICOS NEGROS, barca azul, cabaña madera oscura, mesón amarillo, rocas grises. NO CAMBIAR estos elementos.] "
       : "";
 
-    // Continuity frame prefix when we have exact last frame
     const frameContinuityPrefix = previousClipFrameUrl
-      ? "[🎬 CONTINUIDAD EXACTA: Esta escena comienza EXACTAMENTE desde el último fotograma del plano anterior (Imagen1 = último frame). Mantén personajes, vestuario, iluminación y estilo visual idénticos. Continuación directa sin salto temporal.]  "
+      ? "[🎬 CONTINUIDAD: inicia EXACTAMENTE desde Imagen1 (último frame del clip anterior). Mantén personajes, ropa e iluminación idénticos.] "
       : "";
 
-    // Video instruction: use clear natural language, NOT [Video1] tag (not supported by API)
     const videoInstruction = effectiveVideoUrl
-      ? (isSpanishPrompt
-          ? "[🎬 CONTINUIDAD VISUAL [Video1]: Usa el video de referencia [Video1] como base visual. Continúa EXACTAMENTE el estilo visual, iluminación, personajes, vestuario y ambientación del video [Video1]. Esta escena es la continuación temporal directa. PROHIBIDO cambiar el estilo visual, los colores, la iluminación o el diseño de los personajes respecto al video [Video1].]  "
-          : "[🎬 VISUAL CONTINUITY [Video1]: Use reference video [Video1] as visual base. EXACTLY continue the visual style, lighting, characters, costumes and environment from video [Video1]. Direct temporal continuation. FORBIDDEN to change visual style, colors, lighting or character design from [Video1].]  ")
+      ? "[🎬 VIDEO [Video1]: continúa el estilo visual exacto de [Video1]. PROHIBIDO cambiar estilo, colores, iluminación o personajes respecto a [Video1].] "
       : "";
 
-    const { compiled: compiledPrompt } = compileFinalPrompt(
-      frameContinuityPrefix + islaAnchor + videoInstruction + clip.prompt,
+    const rawPrefix = frameContinuityPrefix + islaAnchor + videoInstruction;
+
+    const { compiled: compiledRaw } = compileFinalPrompt(
+      rawPrefix + clip.prompt,
       characters,
       props,
       locations,
@@ -1503,6 +1500,17 @@ export default function App() {
       effectiveImages,
       !!effectiveVideoUrl
     );
+
+    // Safety truncation — VideoGenAPI rejects prompts > 5000 chars
+    const MAX_PROMPT = 4900;
+    const compiledPrompt = compiledRaw.length <= MAX_PROMPT
+      ? compiledRaw
+      : compiledRaw.substring(0, MAX_PROMPT).replace(/[^.!?]*$/, "").trim() ||
+        compiledRaw.substring(0, MAX_PROMPT).trim();
+
+    if (compiledRaw.length > MAX_PROMPT) {
+      console.warn(`[Prompt] Truncated from ${compiledRaw.length} to ${compiledPrompt.length} chars`);
+    }
 
     const finalGenType: GenerationMode = (effectiveImages.length > 0 || effectiveVideoUrl)
       ? "reference-to-video"

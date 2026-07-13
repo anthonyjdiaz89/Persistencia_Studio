@@ -1798,9 +1798,16 @@ JSON Schema:
       }
 
       // VideoGenAPI expects a flat payload at the root level for `/api/v1/generate`
+      // Enforce 5000 char limit (server-side safety net, client already truncates)
+      const promptText = typeof sanitizedInput.prompt === "string"
+        ? sanitizedInput.prompt.substring(0, 4999)
+        : "";
+      if (sanitizedInput.prompt?.length > 4999) {
+        console.warn(`[Prompt] Server truncated prompt from ${sanitizedInput.prompt.length} to 4999 chars`);
+      }
       const payload: Record<string, any> = {
         model: normalizedModel,
-        prompt: sanitizedInput.prompt,
+        prompt: promptText,
         aspect_ratio: normalizedAspectRatio,
         duration: requestedDuration,
         resolution: sanitizedInput.resolution === "4k" ? "4K" : (sanitizedInput.resolution || "1080p"),
