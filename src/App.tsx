@@ -1342,6 +1342,50 @@ export default function App() {
     }
   };
 
+  // Helper: extract last frame from any video URL → uploads to Supabase → returns HTTPS URL
+  // Used to get a "starting image" from a manual video reference so Seedance starts from that frame
+  const extractLastFrameFromVideoUrl = async (videoUrl: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.crossOrigin = "anonymous";
+      video.src = `/api/proxy-video?url=${encodeURIComponent(videoUrl)}`;
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+
+      const timeout = setTimeout(() => {
+        video.onerror = null; video.onseeked = null;
+        console.warn("[AutoFrame] Timeout extracting last frame from reference video");
+        resolve(null);
+      }, 10000);
+
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.max(0.1, video.duration - 0.15);
+      };
+
+      video.onseeked = async () => {
+        clearTimeout(timeout);
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth || 1280;
+          canvas.height = video.videoHeight || 720;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { resolve(null); return; }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          const url = await uploadDataUrlToSupabase(dataUrl, "video-ref-frames");
+          console.log("[AutoFrame] Último frame extraído del video de referencia:", url);
+          resolve(url);
+        } catch (e) {
+          console.warn("[AutoFrame] Error extracting frame:", e);
+          resolve(null);
+        }
+      };
+
+      video.onerror = () => { clearTimeout(timeout); resolve(null); };
+    });
+  };
+
   // 13. Load AI Director clip settings back into prompt workspace
   const handleLoadClipConfig = (clip: ClipBlueprint) => {
     setPromptText(clip.prompt);
@@ -1450,20 +1494,28 @@ export default function App() {
 
     // ── Resolve which images to send to the API ─────────────────────────────
     // PRIORITY LOGIC:
-    // 1. If we have the exact last frame of the previous clip → use it as Imagen1 + characters
-    // 2. If user manually loaded a VIDEO reference → video IS the visual reference,
-    //    only add characters AFTER it (no competing scene reference images)
-    // 3. Auto previous-clip video → combine with character images (style + characters)
-    // 4. No video at all → use reference images + characters
+    // 1. If we have the exact last frame of the previous clip → Imagen1 + characters
+    // 2. If user manually loaded a VIDEO reference → auto-extract its last frame as Imagen1
+    //    + characters (the last frame forces model to START from that visual)
+    // 3. Auto previous-clip video → combine with reference images + characters
+    // 4. No video at all → reference images + characters
     let effectiveImages: string[];
     if (previousClipFrameUrl) {
-      // Frame-exact continuity: last frame FIRST so model starts from there, then characters
       effectiveImages = [previousClipFrameUrl, ...selectedRefImages].slice(0, 9);
     } else if (manualVideoUrl) {
-      // User explicitly chose a reference video → that video carries the visual style.
-      // Only include character images (no competing reference scene image) to reduce noise.
-      // manualImages may include the scene ref image which conflicts with video continuity.
-      effectiveImages = autoRefImages.slice(0, 9);
+      // Auto-extract the last frame of the reference video so the model STARTS from that frame
+      setSuccessToast("Extrayendo último fotograma del video de referencia...");
+      const autoExtractedFrame = await extractLastFrameFromVideoUrl(manualVideoUrl);
+      if (autoExtractedFrame) {
+        // Last frame as Imagen1 (starting point) + characters after
+        effectiveImages = [autoExtractedFrame, ...autoRefImages].slice(0, 9);
+        setSuccessToast("✓ Fotograma extraído — el clip iniciará desde ese plano.");
+        setTimeout(() => setSuccessToast(null), 4000);
+      } else {
+        // Frame extraction failed → just use characters (video still provides style context)
+        effectiveImages = autoRefImages.slice(0, 9);
+        setSuccessToast(null);
+      }
     } else {
       // No video reference: use all combined images (scene ref + characters)
       effectiveImages = selectedRefImages;
