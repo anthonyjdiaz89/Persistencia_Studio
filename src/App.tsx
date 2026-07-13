@@ -1448,11 +1448,26 @@ export default function App() {
       }
     }
 
-    // When we have the previous clip's last frame, use it as the leading image reference
-    // so the new clip STARTS from exactly that frame
-    const effectiveImages = previousClipFrameUrl
-      ? [previousClipFrameUrl]  // last frame as sole starting point
-      : selectedRefImages;
+    // ── Resolve which images to send to the API ─────────────────────────────
+    // PRIORITY LOGIC:
+    // 1. If we have the exact last frame of the previous clip → use it as Imagen1 + characters
+    // 2. If user manually loaded a VIDEO reference → video IS the visual reference,
+    //    only add characters AFTER it (no competing scene reference images)
+    // 3. Auto previous-clip video → combine with character images (style + characters)
+    // 4. No video at all → use reference images + characters
+    let effectiveImages: string[];
+    if (previousClipFrameUrl) {
+      // Frame-exact continuity: last frame FIRST so model starts from there, then characters
+      effectiveImages = [previousClipFrameUrl, ...selectedRefImages].slice(0, 9);
+    } else if (manualVideoUrl) {
+      // User explicitly chose a reference video → that video carries the visual style.
+      // Only include character images (no competing reference scene image) to reduce noise.
+      // manualImages may include the scene ref image which conflicts with video continuity.
+      effectiveImages = autoRefImages.slice(0, 9);
+    } else {
+      // No video reference: use all combined images (scene ref + characters)
+      effectiveImages = selectedRefImages;
+    }
 
     const promptLower = clip.prompt.toLowerCase();
     const isSpanishPrompt = /[áéíóúñ¿¡]/.test(clip.prompt) || promptLower.includes(' en ') || promptLower.includes(' de ');
@@ -1472,11 +1487,11 @@ export default function App() {
       ? "[🎬 CONTINUIDAD EXACTA: Esta escena comienza EXACTAMENTE desde el último fotograma del plano anterior (Imagen1 = último frame). Mantén personajes, vestuario, iluminación y estilo visual idénticos. Continuación directa sin salto temporal.]  "
       : "";
 
-    // Add video reference instruction to prompt when continuity video is used
+    // Video instruction: use clear natural language, NOT [Video1] tag (not supported by API)
     const videoInstruction = effectiveVideoUrl
       ? (isSpanishPrompt
-          ? "[🎬 CONTINUIDAD: Usa el video de referencia [Video1] como contexto visual. Mantén exactamente los mismos personajes, vestuario, iluminación, estilo visual y arquitectura del video anterior. Esta escena es la continuación temporal directa del plano anterior.]  "
-          : "[🎬 CONTINUITY: Use reference video [Video1] as visual context. Maintain exactly the same characters, costumes, lighting, visual style and architecture from the previous video. This scene is the direct temporal continuation of the previous shot.]  ")
+          ? "[🎬 CONTINUIDAD VISUAL: Continúa EXACTAMENTE el estilo visual, iluminación, personajes, vestuario y ambientación del video de referencia adjunto. Esta escena es la continuación temporal directa. PROHIBIDO cambiar el estilo visual, los colores, la iluminación o el diseño de los personajes respecto al video de referencia.]  "
+          : "[🎬 VISUAL CONTINUITY: EXACTLY continue the visual style, lighting, characters, costumes and environment from the attached reference video. This scene is the direct temporal continuation. FORBIDDEN to change visual style, colors, lighting or character design compared to the reference video.]  ")
       : "";
 
     const { compiled: compiledPrompt } = compileFinalPrompt(
