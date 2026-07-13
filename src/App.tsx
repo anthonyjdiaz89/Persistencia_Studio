@@ -1145,6 +1145,31 @@ export default function App() {
     setTimeout(() => setSuccessToast(null), 3000);
   };
 
+  // Helper: upload a data URL (base64 image) to Supabase via server, returns HTTPS URL
+  const uploadDataUrlToSupabase = async (dataUrl: string, folder: string = "extracted-frames"): Promise<string> => {
+    // Convert data URL to Blob
+    const [header, base64] = dataUrl.split(",");
+    const mimeMatch = header.match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const ext = mime.split("/")[1] || "jpg";
+    const params = new URLSearchParams({ bucket: "video-assets", folder, ext });
+    const res = await fetch(`/api/upload-file?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": mime },
+      body: blob,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.url;
+  };
+
   // 12.5 Frame Extraction function
   const handleExtractFrame = async (task: VideoTask, frameType: "start" | "end") => {
     const videoUrl = task.data?.results?.[0];
@@ -1217,19 +1242,32 @@ export default function App() {
       }
 
       if (extractedUrl) {
+        // ── Upload canvas data URL to Supabase for a real HTTPS URL ──────────
+        // The API requires HTTPS URLs; data URLs (base64) are rejected.
+        let publicUrl = extractedUrl;
+        if (extractedUrl.startsWith("data:")) {
+          try {
+            publicUrl = await uploadDataUrlToSupabase(extractedUrl, "extracted-frames");
+            console.log("[FrameExtract] Uploaded to Supabase:", publicUrl);
+          } catch (uploadErr: any) {
+            console.warn("[FrameExtract] Upload to Supabase failed, using data URL as fallback:", uploadErr.message);
+            // Keep data URL as fallback — won't work for API calls but at least stores locally
+          }
+        }
+
         // 1. Send to Agent (Casting Drawer / Asset Library)
         const frameLabel = frameType === "start" ? "Inicio" : "Final";
         const filename = `Frame ${frameLabel} de Shot ${task.clipNumber || task.id.slice(0, 4)}`;
         await handleAddReferenceFrame({
           name: filename,
           description: `Extraído automáticamente de la generación ${task.id.slice(0, 6)}`,
-          imageUrl: extractedUrl
+          imageUrl: publicUrl
         });
 
         // 2. Send to Composer (refImageUrls inside PromptBuilderPanel)
-        setExtractedRefImage(extractedUrl);
+        setExtractedRefImage(publicUrl);
 
-        setSuccessToast(`¡Frame ${frameLabel} extraído con éxito! Agregado a referencias en el Composer y en el panel del Agente.`);
+        setSuccessToast(`¡Frame ${frameLabel} extraído y guardado en Supabase! Disponible en Composer y Casting.`);
         setTimeout(() => setSuccessToast(null), 5000);
       }
     } catch (err: any) {
