@@ -52,7 +52,7 @@ const LOCATION_PROPORTIONS: Record<string, string> = {
 };
 
 // Base animated series visual style - ALWAYS applied
-const SERIES_BASE_STYLE = "high-quality 3D Pixar-style animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, Disney-level character rendering";
+const SERIES_BASE_STYLE = "high-quality 3D cinematic animation, detailed subsurface scattering on skin, cinematic depth of field, photorealistic textures on wood fabric and sand, vibrant natural color palette, soft rim lighting, premium 3D character rendering";
 
 export function compileCameraPrompt(settings: CameraSettings): string {
   const parts: string[] = [];
