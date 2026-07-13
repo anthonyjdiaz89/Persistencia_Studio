@@ -1370,10 +1370,13 @@ export default function App() {
     // Harvest reference images automatically and sort them in order of appearance in the prompt
     const autoRefImages = harvestAndSortRefImages(clip.prompt, characters, props, locations);
 
-    // Use selected reference frames or fall back to harvested assets
-    const selectedRefImages = clip.image_urls && clip.image_urls.length > 0
-      ? clip.image_urls
-      : autoRefImages;
+    // COMBINE: manual/reference images FIRST, then auto-detected @mention characters
+    // Bug fix: previously clip.image_urls completely replaced autoRefImages, losing characters
+    const manualImages = clip.image_urls && clip.image_urls.length > 0 ? clip.image_urls : [];
+    const selectedRefImages = [
+      ...manualImages,
+      ...autoRefImages.filter(url => !manualImages.includes(url))
+    ].slice(0, 9);
 
     // Continuity logic: find the previous clip's completed video URL in the user's tasks history
     let previousClipVideoUrl: string | null = null;
@@ -1517,10 +1520,12 @@ export default function App() {
       // Harvest reference images automatically and sort them in order of appearance in the prompt
       const autoRefImages = harvestAndSortRefImages(clip.prompt, characters, props, locations);
 
-      // Use selected reference frames or fall back to harvested assets
-      const selectedRefImages = clip.image_urls && clip.image_urls.length > 0
-        ? clip.image_urls
-        : autoRefImages;
+      // COMBINE: manual images (scene ref, per-clip ref) FIRST + auto @mention characters
+      const manualImages = clip.image_urls && clip.image_urls.length > 0 ? clip.image_urls : [];
+      const selectedRefImages = [
+        ...manualImages,
+        ...autoRefImages.filter(url => !manualImages.includes(url))
+      ].slice(0, 9);
 
       const { compiled: compiledPrompt } = compileFinalPrompt(
         clip.prompt,
@@ -1583,18 +1588,19 @@ export default function App() {
         // Harvest reference images automatically and sort them in order of appearance in the prompt
         const autoRefImages = harvestAndSortRefImages(clip.prompt, characters, props, locations);
 
-        // Use selected reference frames or fall back to harvested assets
-        const selectedRefImages = clip.image_urls && clip.image_urls.length > 0
-          ? clip.image_urls
-          : autoRefImages;
+        // COMBINE: manual images (scene ref, per-clip ref) FIRST + auto @mention characters
+        const manualImages = clip.image_urls && clip.image_urls.length > 0 ? clip.image_urls : [];
+        const selectedRefImages = [
+          ...manualImages,
+          ...autoRefImages.filter(url => !manualImages.includes(url))
+        ].slice(0, 9);
 
         // ── CONTINUIDAD FRAME-EXACT ──────────────────────────────────────────────
-        // Si tenemos el último fotograma del clip anterior, lo usamos como imagen de
-        // inicio (image_urls[0]) — el modelo EMPIEZA desde ese fotograma exacto.
-        // El video completo del clip anterior va en video_urls como contexto adicional.
+        // Cuando hay último fotograma: es Imagen1 (inicio exacto) + personajes después
+        // Cuando no hay: usar selectedRefImages (refs manuales + personajes)
         const hasContinuityFrame = !!lastCompletedFrameUrl;
         const continuityImages = hasContinuityFrame
-          ? [lastCompletedFrameUrl!]  // sólo el último fotograma como inicio exacto
+          ? [lastCompletedFrameUrl!, ...selectedRefImages].slice(0, 9)  // frame exacto + personajes
           : selectedRefImages;
         const continuityPromptPrefix = hasContinuityFrame
           ? "[🎬 CONTINUIDAD EXACTA: Esta escena comienza EXACTAMENTE desde el último fotograma del plano anterior (Imagen1 = último frame del clip previo). Mantén personajes, vestuario, iluminación y estilo visual idénticos al video de referencia. Continuación temporal directa sin salto.]  "
