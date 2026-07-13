@@ -2243,8 +2243,10 @@ export default function App() {
                                   playsInline
                                 />
                                 
-                                {/* Hover absolute overlay with NO text, only icons */}
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-4">
+                                {/* Overlay with frame extraction buttons
+                                    Desktop: only on hover (opacity-0 → group-hover:opacity-100)
+                                    Mobile: always visible (md:opacity-0 md:group-hover:opacity-100) */}
+                                <div className="absolute inset-0 bg-black/60 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 md:gap-4">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -2632,8 +2634,8 @@ export default function App() {
                           <>
                             <video src={videoUrl} poster={poster} className="w-full h-full object-cover" preload="metadata" muted />
                             
-                            {/* Hover absolute overlay with NO text, only icons */}
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-4">
+                            {/* Mobile: always visible | Desktop: only on hover */}
+                            <div className="absolute inset-0 bg-black/60 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-4">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

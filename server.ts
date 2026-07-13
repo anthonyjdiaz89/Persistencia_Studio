@@ -650,19 +650,46 @@ async function startServer() {
     }
     try {
       console.log(`[Video Proxy] Proxying video: ${videoUrl}`);
-      const videoRes = await fetch(videoUrl);
-      if (!videoRes.ok) {
+
+      // Forward Range header from client (required for seekable video / canvas frame extraction)
+      const rangeHeader = req.headers.range;
+      const fetchHeaders: Record<string, string> = {};
+      if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
+
+      const videoRes = await fetch(videoUrl, { headers: fetchHeaders });
+      if (!videoRes.ok && videoRes.status !== 206) {
         return res.status(videoRes.status).send(`Failed to fetch video: ${videoRes.statusText}`);
       }
-      
+
       const contentType = videoRes.headers.get("content-type") || "video/mp4";
+      const contentLength = videoRes.headers.get("content-length");
+      const contentRange = videoRes.headers.get("content-range");
+      const acceptRanges = videoRes.headers.get("accept-ranges");
+
       res.setHeader("Content-Type", contentType);
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET");
-      
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+      if (contentRange)  res.setHeader("Content-Range", contentRange);
+      if (acceptRanges)  res.setHeader("Accept-Ranges", acceptRanges);
+      else               res.setHeader("Accept-Ranges", "bytes");
+
+      // Stream response directly (avoid buffering huge videos in memory)
+      if (videoRes.body) {
+        const statusCode = videoRes.status === 206 ? 206 : 200;
+        res.status(statusCode);
+        const reader = videoRes.body.getReader();
+        const pump = async () => {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); return; }
+          res.write(value);
+          return pump();
+        };
+        return pump();
+      }
+
       const arrayBuffer = await videoRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      return res.send(buffer);
+      return res.send(Buffer.from(arrayBuffer));
     } catch (err: any) {
       console.error("[Video Proxy] Error proxying video:", err);
       return res.status(500).send(err.message || "Failed to proxy video");
