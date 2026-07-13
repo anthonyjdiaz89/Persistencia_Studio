@@ -1490,8 +1490,8 @@ export default function App() {
     // Video instruction: use clear natural language, NOT [Video1] tag (not supported by API)
     const videoInstruction = effectiveVideoUrl
       ? (isSpanishPrompt
-          ? "[🎬 CONTINUIDAD VISUAL: Continúa EXACTAMENTE el estilo visual, iluminación, personajes, vestuario y ambientación del video de referencia adjunto. Esta escena es la continuación temporal directa. PROHIBIDO cambiar el estilo visual, los colores, la iluminación o el diseño de los personajes respecto al video de referencia.]  "
-          : "[🎬 VISUAL CONTINUITY: EXACTLY continue the visual style, lighting, characters, costumes and environment from the attached reference video. This scene is the direct temporal continuation. FORBIDDEN to change visual style, colors, lighting or character design compared to the reference video.]  ")
+          ? "[🎬 CONTINUIDAD VISUAL [Video1]: Usa el video de referencia [Video1] como base visual. Continúa EXACTAMENTE el estilo visual, iluminación, personajes, vestuario y ambientación del video [Video1]. Esta escena es la continuación temporal directa. PROHIBIDO cambiar el estilo visual, los colores, la iluminación o el diseño de los personajes respecto al video [Video1].]  "
+          : "[🎬 VISUAL CONTINUITY [Video1]: Use reference video [Video1] as visual base. EXACTLY continue the visual style, lighting, characters, costumes and environment from video [Video1]. Direct temporal continuation. FORBIDDEN to change visual style, colors, lighting or character design from [Video1].]  ")
       : "";
 
     const { compiled: compiledPrompt } = compileFinalPrompt(
