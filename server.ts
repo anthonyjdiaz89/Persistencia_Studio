@@ -1193,7 +1193,8 @@ JSON Schema:
         is_current_active: currentActiveKeyAlias === k.alias,
         updated_at: new Date().toISOString()
       }));
-      await sb.from('api_key_states').upsert(rows, { onConflict: 'id' });
+      // Use upsert with onConflict on BOTH id AND alias to prevent duplicates
+      await sb.from('api_key_states').upsert(rows, { onConflict: 'alias' });
     } catch (e) { console.warn('[SupabaseKeyState] Save failed:', (e as any).message); }
   };
 
@@ -1201,17 +1202,29 @@ JSON Schema:
     const sb = getSupabaseForKeyStates();
     if (!sb) return false;
     try {
-      const { data, error } = await sb.from('api_key_states').select('*');
+      // Order by updated_at DESC so latest row wins when duplicates exist
+      const { data, error } = await sb
+        .from('api_key_states')
+        .select('*')
+        .order('updated_at', { ascending: false });
       if (error || !data?.length) return false;
       const now = Date.now();
+      const processed = new Set<string>(); // deduplicate by alias
       data.forEach((row: any) => {
+        if (processed.has(row.alias)) return; // skip older duplicates
+        processed.add(row.alias);
         const key = apiKeys.find(k => k.key.startsWith(row.id));
         if (!key) return;
         key.apiTodayCount = row.api_today_count;
         key.apiTotalCount = row.api_total_count;
         key.apiResetTimeStr = row.api_reset_time_str;
         key.limit = row.rate_limit || key.limit;
-        if (row.rate_limit_reset_time && row.rate_limit_reset_time > now) {
+        // Only restore block if it's still valid in the future AND less than 2 hours
+        // (safety: discard stale blocks > 2h old that were never cleaned up)
+        const MAX_BLOCK_MS = 2 * 60 * 60 * 1000; // 2 hours
+        if (row.rate_limit_reset_time &&
+            row.rate_limit_reset_time > now &&
+            (row.rate_limit_reset_time - now) < MAX_BLOCK_MS) {
           key.isAvailable = false;
           key.rateLimitResetTime = row.rate_limit_reset_time;
           key.currentUsage = row.current_usage;

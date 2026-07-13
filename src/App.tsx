@@ -1016,7 +1016,14 @@ export default function App() {
 
       if (!res.ok) {
         const errorMsg = extractApiErrorMessage(data, `Request failed with status ${res.status}`);
-        if (res.status === 401 || errorMsg.toLowerCase().includes("api key") || errorMsg.toLowerCase().includes("unauthorized") || errorMsg.toLowerCase().includes("invalid")) {
+        // Only treat as key error when it's ACTUALLY a key authentication issue
+        // "invalid" alone is too broad — can appear in rate-limit/copyright/validation errors
+        const isKeyAuthError = res.status === 401 ||
+          errorMsg.toLowerCase().includes("api key") ||
+          errorMsg.toLowerCase().includes("unauthorized") ||
+          (errorMsg.toLowerCase().includes("invalid") && errorMsg.toLowerCase().includes("key")) ||
+          errorMsg.toLowerCase().includes("authentication");
+        if (isKeyAuthError) {
           setErrorNotification("Clave de API no válida o desautorizada. Por favor, verifica tu clave en el panel de configuración.");
           return false;
         }
