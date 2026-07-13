@@ -45,67 +45,47 @@ export async function uploadImageToSupabase(
   bucketName: string = "video-assets",
   folder: string = "images"
 ): Promise<string> {
-  const config = await getSupabaseConfig();
-  
   // Resize image before upload to keep storage efficient
   const resizedBlob = await resizeImage(file, 1024);
-  
-  // Generate unique filename with timestamp
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 8);
-  const extension = file.name.split('.').pop() || 'jpg';
-  const fileName = `${folder}/${timestamp}_${randomStr}.${extension}`;
-  
-  // Upload to Supabase Storage
-  const uploadUrl = `${config.url}/storage/v1/object/${bucketName}/${fileName}`;
-  
-  const uploadRes = await fetch(uploadUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.anonKey}`,
-      'Content-Type': resizedBlob.type,
-    },
-    body: resizedBlob
-  });
-  
-  if (!uploadRes.ok) {
-    const errorText = await uploadRes.text();
-    console.error("Supabase upload error:", errorText);
-    throw new Error(`Failed to upload image to Supabase: ${uploadRes.status} ${errorText}`);
-  }
-  
-  // Return public URL
-  const publicUrl = `${config.url}/storage/v1/object/public/${bucketName}/${fileName}`;
-  return publicUrl;
+  const resizedFile = new File([resizedBlob], file.name, { type: resizedBlob.type });
+  // Route through server (uses service role key, bypasses RLS)
+  return uploadViaServer(resizedFile, bucketName, folder);
 }
 
 /**
  * Upload any file (video, audio, etc.) to Supabase Storage WITHOUT image processing
+ * Routes through the server so SUPABASE_SERVICE_ROLE_KEY is used (bypasses RLS).
  */
 export async function uploadFileToSupabase(
   file: File,
   bucketName: string = "video-assets",
   folder: string = "uploads"
 ): Promise<string> {
-  const config = await getSupabaseConfig();
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 8);
-  const extension = file.name.split('.').pop() || 'bin';
-  const fileName = `${folder}/${timestamp}_${randomStr}.${extension}`;
-  const uploadUrl = `${config.url}/storage/v1/object/${bucketName}/${fileName}`;
-  const uploadRes = await fetch(uploadUrl, {
+  return uploadViaServer(file, bucketName, folder);
+}
+
+/**
+ * Upload through the Express server which uses the Service Role Key.
+ * Avoids RLS issues with the anon key in Supabase Storage.
+ */
+async function uploadViaServer(
+  file: File,
+  bucket: string = "video-assets",
+  folder: string = "uploads"
+): Promise<string> {
+  const ext = file.name.split('.').pop() || 'bin';
+  const params = new URLSearchParams({ bucket, folder, ext });
+  const res = await fetch(`/api/upload-file?${params}`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.anonKey}`,
-      'Content-Type': file.type || 'application/octet-stream',
-    },
-    body: file
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
   });
-  if (!uploadRes.ok) {
-    const errorText = await uploadRes.text();
-    throw new Error(`Upload failed: ${uploadRes.status} ${errorText}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `Upload failed: ${res.status}`);
   }
-  return `${config.url}/storage/v1/object/public/${bucketName}/${fileName}`;
+  const data = await res.json();
+  return data.url;
 }
 
 /**

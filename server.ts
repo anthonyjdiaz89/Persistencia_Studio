@@ -598,6 +598,50 @@ async function startServer() {
     }
   });
 
+  // API Route: Server-side file upload to Supabase Storage
+  // Uses SUPABASE_SERVICE_ROLE_KEY (bypasses RLS, full write permission)
+  // Falls back to SUPABASE_ANON_KEY if service role key not available
+  app.post("/api/upload-file", express.raw({ type: "*/*", limit: "50mb" }), async (req, res) => {
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(500).json({ error: "Supabase not configured" });
+      }
+
+      const bucket = (req.query.bucket as string) || "video-assets";
+      const folder = (req.query.folder as string) || "uploads";
+      const ext    = (req.query.ext as string)    || "bin";
+      const mime   = (req.headers["content-type"] as string) || "application/octet-stream";
+
+      const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${fileName}`;
+
+      const r = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceKey}`,
+          "Content-Type": mime,
+        },
+        body: req.body as Buffer,
+      });
+
+      if (!r.ok) {
+        const errText = await r.text();
+        console.error("[SupabaseUpload] Failed:", r.status, errText.substring(0, 200));
+        return res.status(r.status).json({ error: `Upload failed: ${r.status} ${errText.substring(0, 200)}` });
+      }
+
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${fileName}`;
+      console.log(`[SupabaseUpload] OK → ${publicUrl}`);
+      return res.json({ url: publicUrl });
+    } catch (err: any) {
+      console.error("[SupabaseUpload] Error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // API Route: Proxy Video for HTML5 Canvas Frame Extraction with CORS headers
   app.get("/api/proxy-video", async (req, res) => {
     const videoUrl = req.query.url as string;
