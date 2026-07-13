@@ -122,9 +122,13 @@ export default function ScriptPanel({
 
   /* ── Render with ref image injection ───────────── */
   const renderClip=(clip:ClipBlueprint,scene:SceneBlueprint,ci:number)=>{
-    // Build the clip with reference image (first clip of block) + continuity video
-    const withRef = (ci===0&&scene.referenceImageUrl)
-      ? {...clip, image_urls:[scene.referenceImageUrl,...(clip.image_urls||[])].slice(0,5)}
+    // Per-clip reference image (takes priority) OR scene reference (applied to ALL clips)
+    const perClipRef = clip.clip_ref_image || null;
+    const sceneRef   = scene.referenceImageUrl || null;
+    const refImage   = perClipRef || sceneRef; // use per-clip if set, else scene ref
+
+    const withRef = refImage
+      ? {...clip, image_urls:[refImage,...(clip.image_urls||[]).filter(u=>u!==refImage)].slice(0,5)}
       : clip;
     // Include video_url for continuity if set on the clip
     const withVideo = withRef.video_url
@@ -400,7 +404,14 @@ function ClipCard({
   const [videoUrlInput, setVideoUrlInput] = useState("");
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const videoFileRef = useRef<HTMLInputElement>(null);
+  // Per-clip reference image (fotograma de referencia)
+  const [showImageSelector, setShowImageSelector] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageFileRef = useRef<HTMLInputElement>(null);
   const completedVideos = tasks.filter(t => t.status === 'completed' && t.data?.results?.[0]);
+  // Completed tasks that have a last_frame_url (most useful as reference frames)
+  const framesFromHistory = tasks.filter(t => t.status === 'completed' && t.data?.last_frame_url);
   const assets=[
     ...characters.map(c=>({label:`@${c.name}`,handle:`@${c.name}`,type:"char"})),
     ...props.map(p=>({label:`@${p.name}`,handle:`@${p.name}`,type:"prop"})),
@@ -414,6 +425,8 @@ function ClipCard({
         <div className="flex items-center gap-1 flex-shrink-0">
           <span className="w-5 h-5 rounded bg-[#d1f025]/10 text-[#d1f025] text-[9px] font-black flex items-center justify-center">{clip.clipNumber}</span>
           {isFirstClip&&hasSceneRef&&<span title="Usará imagen de referencia del bloque"><Image className="w-3 h-3 text-purple-400"/></span>}
+          {clip.clip_ref_image&&<span title="Fotograma de referencia propio"><Image className="w-3 h-3 text-purple-300"/></span>}
+          {clip.video_url&&<span title="Video de referencia"><Video className="w-3 h-3 text-cyan-400"/></span>}
         </div>
         {isExpanded?<ChevronDown className="w-3 h-3 text-gray-500"/>:<ChevronRight className="w-3 h-3 text-gray-500"/>}
         <span className="flex-1 text-[10px] text-gray-300 group-hover:text-white truncate min-w-0">{clip.title}</span>
@@ -575,6 +588,96 @@ function ClipCard({
                             </p>
                           </div>
                           {isSelected && <Check className="w-3 h-3 text-cyan-400 flex-shrink-0"/>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Fotograma de referencia por clip */}
+          <div className="border border-white/8 rounded-lg overflow-hidden">
+            <button
+              onClick={()=>setShowImageSelector(v=>!v)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] hover:bg-white/5 transition-colors"
+            >
+              <Image className={`w-3 h-3 flex-shrink-0 ${clip.clip_ref_image?"text-purple-400":"text-gray-600"}`}/>
+              <span className={`flex-1 text-left truncate ${clip.clip_ref_image?"text-purple-400":"text-gray-500"}`}>
+                {clip.clip_ref_image ? "Fotograma de referencia ✓" : "Fotograma de referencia (por clip)"}
+              </span>
+              {clip.clip_ref_image && (
+                <button onClick={e=>{e.stopPropagation();onUpdateField("clip_ref_image","");}} className="text-gray-600 hover:text-red-400 flex-shrink-0">
+                  <X className="w-3 h-3"/>
+                </button>
+              )}
+              {showImageSelector?<ChevronDown className="w-3 h-3 text-gray-600"/>:<ChevronRight className="w-3 h-3 text-gray-600"/>}
+            </button>
+
+            {showImageSelector && (
+              <div className="border-t border-white/8 bg-[#0e0f12]">
+                {/* Paste URL */}
+                <div className="px-2 pt-2 pb-1" onClick={e=>e.stopPropagation()}>
+                  <p className="text-[9px] text-gray-500 mb-1">Pegar URL de imagen/fotograma:</p>
+                  <div className="flex gap-1">
+                    <input
+                      value={imageUrlInput}
+                      onChange={e=>setImageUrlInput(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter"&&imageUrlInput.trim()){onUpdateField("clip_ref_image",imageUrlInput.trim());setShowImageSelector(false);setImageUrlInput("");}e.stopPropagation();}}
+                      onClick={e=>e.stopPropagation()}
+                      placeholder="https://... (jpg, png, webp)"
+                      className="flex-1 text-[9px] bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white placeholder-gray-600 focus:outline-none focus:border-purple-400/40"
+                    />
+                    <button
+                      onClick={e=>{e.stopPropagation();if(imageUrlInput.trim()){onUpdateField("clip_ref_image",imageUrlInput.trim());setShowImageSelector(false);setImageUrlInput("");}}}
+                      disabled={!imageUrlInput.trim()}
+                      className="text-[9px] px-2 py-1 bg-purple-400/10 text-purple-400 rounded hover:bg-purple-400/20 disabled:opacity-30 transition-colors"
+                    >Usar</button>
+                  </div>
+                </div>
+
+                {/* Upload image */}
+                <div className="px-2 pb-2">
+                  <input ref={imageFileRef} type="file" accept="image/*" className="hidden"
+                    onChange={async (e)=>{
+                      const file = e.target.files?.[0]; if(!file) return;
+                      setIsUploadingImage(true);
+                      try {
+                        const url = await uploadImageToSupabase(file, "video-assets", "reference-frames");
+                        onUpdateField("clip_ref_image", url);
+                        setShowImageSelector(false);
+                      } catch(err){ alert("Error al subir imagen: "+(err instanceof Error?err.message:String(err))); }
+                      finally{ setIsUploadingImage(false); e.target.value=""; }
+                    }}
+                  />
+                  <button onClick={()=>imageFileRef.current?.click()} disabled={isUploadingImage}
+                    className="w-full flex items-center justify-center gap-1.5 text-[9px] py-1 border border-dashed border-purple-400/20 text-purple-400/60 hover:text-purple-400 hover:border-purple-400/40 rounded transition-all">
+                    {isUploadingImage ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
+                    {isUploadingImage ? "Subiendo..." : "Subir imagen de referencia"}
+                  </button>
+                </div>
+
+                {/* Last frames from history (most useful: pick last frame of prev clip) */}
+                {framesFromHistory.length > 0 && (
+                  <div className="border-t border-white/8 max-h-36 overflow-y-auto">
+                    <p className="text-[9px] text-gray-500 px-2 pt-1.5 pb-0.5 font-medium">Último fotograma del clip generado:</p>
+                    {framesFromHistory.slice(0,12).map(task=>{
+                      const frameUrl = task.data!.last_frame_url!;
+                      const isSelected = clip.clip_ref_image === frameUrl;
+                      return (
+                        <button key={task.id}
+                          onClick={()=>{ onUpdateField("clip_ref_image", isSelected?"":frameUrl); setShowImageSelector(false); }}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors ${isSelected?"bg-purple-400/10":""}`}
+                        >
+                          <img src={frameUrl} alt="" className="w-8 h-5 object-cover rounded flex-shrink-0 border border-white/10"/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] text-gray-300 truncate">
+                              {task.sceneTitle ? `${task.sceneTitle} · Shot ${task.clipNumber}` : task.id.slice(0,12)+'...'}
+                            </p>
+                            <p className="text-[8px] text-gray-600">último fotograma</p>
+                          </div>
+                          {isSelected && <Check className="w-3 h-3 text-purple-400 flex-shrink-0"/>}
                         </button>
                       );
                     })}
